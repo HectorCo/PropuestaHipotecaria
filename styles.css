@@ -120,6 +120,29 @@ button:disabled { opacity: .6; cursor: wait; }
 }
 .btn-secondary:hover { background: #f8fafc; }
 
+/* ---------- Bloque condicional: hipoteca mixta ---------- */
+.bloque-mixta {
+  grid-column: 1 / -1;
+  background: #f8fafc;
+  border: 1px dashed var(--primary-light);
+  border-radius: 10px;
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .75rem 1rem;
+  margin-top: .25rem;
+}
+
+.bloque-mixta[hidden] { display: none; }
+
+.bloque-mixta .bloque-titulo {
+  grid-column: 1 / -1;
+  font-weight: 600;
+  color: var(--primary);
+  font-size: .85rem;
+  margin: 0 0 .25rem;
+}
+
 /* ---------- Modal ---------- */
 .modal {
   position: fixed;
@@ -249,4 +272,5 @@ button:disabled { opacity: .6; cursor: wait; }
   .modal { padding: 0; }
   .modal-panel { max-height: 100vh; border-radius: 0; }
   .modal-toolbar { justify-content: center; }
+  .bloque-mixta { grid-template-columns: 1fr; }
 }

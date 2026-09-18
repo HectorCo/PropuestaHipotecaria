@@ -1,7 +1,18 @@
 (() => {
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
           WidthType, AlignmentType, BorderStyle, ShadingType, HeadingLevel } = window.docx;
-  const html2pdf = window.html2pdf;
+
+  // pdfmake fonts
+  if (window.pdfMake && window.pdfMake.vfs) {
+    pdfMake.fonts = {
+      Roboto: {
+        normal: 'Roboto-Regular.ttf',
+        bold: 'Roboto-Medium.ttf',
+        italics: 'Roboto-Italic.ttf',
+        bolditalics: 'Roboto-MediumItalic.ttf',
+      },
+    };
+  }
 
   const form = document.getElementById('formPropuesta');
   const modal = document.getElementById('previewModal');
@@ -13,7 +24,12 @@
   const btnClose = document.getElementById('btnClose');
 
   const STORAGE_KEY = 'propuesta_borrador_v1';
-  const FONT = 'Aptos, Calibri, Segoe UI, sans-serif';
+  const FONT_DOCX = 'Aptos, Calibri, Segoe UI, sans-serif';
+  const COLOR_PRIMARY = '#1E3A8A';
+  const COLOR_MUTED = '#64748B';
+  const COLOR_TEXT = '#1E293B';
+  const COLOR_BORDER = '#CBD5E1';
+  const COLOR_HEADER_BG = '#F1F5F9';
 
   let ultimosDatos = null;
 
@@ -49,7 +65,6 @@
     for (const el of form.elements) if (el.name) datos[el.name] = el.value;
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(datos)); } catch (_) {}
   }
-
   function cargarBorrador() {
     try {
       const datos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
@@ -59,14 +74,12 @@
       }
     } catch (_) {}
   }
-
   function limpiarFormulario() {
     if (!confirm('¿Borrar todos los datos del formulario?')) return;
     form.reset();
     localStorage.removeItem(STORAGE_KEY);
     form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
   }
-
   function leerDatos() {
     const d = {};
     for (const el of form.elements) if (el.name) d[el.name] = (el.value || '').trim();
@@ -87,6 +100,8 @@
         `Hemos seleccionado una modalidad ${d.tipoInteres || 'Fija'} que te protege frente a la volatilidad ` +
         `del mercado durante toda la vida de la hipoteca.`,
       conclusion: (d.textoConclusion || '').trim() || conclusionDefault,
+      subtitle: [d.nombreCliente, d.fechaDocumento ? fmtFecha(d.fechaDocumento) : '']
+        .filter(Boolean).join(' · '),
     };
   }
 
@@ -94,12 +109,9 @@
   function construirHTML(d) {
     const t = textos(d);
     const row = (k, v) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`;
-    const subtitle = [d.nombreCliente, d.fechaDocumento ? fmtFecha(d.fechaDocumento) : '']
-      .filter(Boolean).join(' · ');
-
     return `
       <h1 class="doc-title">Propuesta de Financiación Hipotecaria</h1>
-      <p class="doc-subtitle">${esc(subtitle)}</p>
+      <p class="doc-subtitle">${esc(t.subtitle)}</p>
 
       <h2>1. Resumen operación</h2>
       <p>${esc(t.intro)}</p>
@@ -150,22 +162,22 @@
     previewContent.innerHTML = construirHTML(d);
     modal.hidden = false;
     document.body.style.overflow = 'hidden';
-    // Scroll arriba del todo
     modal.querySelector('.modal-body').scrollTop = 0;
   }
-
   function cerrarModal() {
     modal.hidden = true;
     document.body.style.overflow = '';
   }
 
-  // ---------- DOCX ----------
+  // =========================================================
+  // ================  DOCX  =================================
+  // =========================================================
   const BORDER = { style: BorderStyle.SINGLE, size: 4, color: 'CBD5E1' };
 
-  function celda(texto, { bold = false, fill = null, width = null } = {}) {
+  function celdaDocx(texto, { bold = false, fill = null, width = null } = {}) {
     const opts = {
       children: [new Paragraph({
-        children: [new TextRun({ text: texto, bold, size: 22, font: FONT })],
+        children: [new TextRun({ text: texto, bold, size: 22, font: FONT_DOCX })],
       })],
       margins: { top: 80, bottom: 80, left: 120, right: 120 },
     };
@@ -174,11 +186,11 @@
     return new TableCell(opts);
   }
 
-  function tablaDatos(rows) {
+  function tablaDatosDocx(rows) {
     const tableRows = rows.map(([k, v]) => new TableRow({
       children: [
-        celda(k, { bold: true, fill: 'F1F5F9', width: 40 }),
-        celda(v, { width: 60 }),
+        celdaDocx(k, { bold: true, fill: 'F1F5F9', width: 40 }),
+        celdaDocx(v, { width: 60 }),
       ],
     }));
     return new Table({
@@ -191,42 +203,36 @@
     });
   }
 
-  function titulo(texto) {
+  function tituloDocx(texto) {
     return new Paragraph({
       heading: HeadingLevel.HEADING_1,
       spacing: { before: 320, after: 160 },
-      children: [new TextRun({ text: texto, bold: true, color: '1E3A8A', size: 26, font: FONT })],
+      children: [new TextRun({ text: texto, bold: true, color: '1E3A8A', size: 26, font: FONT_DOCX })],
     });
   }
-
-  function parrafo(texto) {
+  function parrafoDocx(texto) {
     return new Paragraph({
       spacing: { after: 120 },
-      children: [new TextRun({ text: texto, size: 22, font: FONT })],
+      children: [new TextRun({ text: texto, size: 22, font: FONT_DOCX })],
     });
   }
-
-  function vineta(texto) {
+  function vinetaDocx(texto) {
     return new Paragraph({
       bullet: { level: 0 },
       spacing: { after: 60 },
-      children: [new TextRun({ text: texto, size: 22, font: FONT })],
+      children: [new TextRun({ text: texto, size: 22, font: FONT_DOCX })],
     });
   }
 
-  function construirDocumento(d) {
+  function construirDocumentoDOCX(d) {
     const t = textos(d);
-    const subtitle = [d.nombreCliente, d.fechaDocumento ? fmtFecha(d.fechaDocumento) : '']
-      .filter(Boolean).join(' · ');
-
     return new Document({
       creator: 'Generador de Propuestas',
       title: `Propuesta de financiación hipotecaria - ${d.nombreCliente || ''}`,
-      // Fuente Aptos como estilo por defecto del documento
       styles: {
         default: {
           document: {
-            run: { font: FONT, size: 22 },
+            run: { font: FONT_DOCX, size: 22 },
             paragraph: { spacing: { after: 120 } },
           },
         },
@@ -241,50 +247,179 @@
             spacing: { after: 80 },
             children: [new TextRun({
               text: 'Propuesta de Financiación Hipotecaria',
-              bold: true, size: 34, color: '1E3A8A', font: FONT,
+              bold: true, size: 34, color: '1E3A8A', font: FONT_DOCX,
             })],
           }),
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 320 },
             children: [new TextRun({
-              text: subtitle, italics: true, color: '64748B', size: 20, font: FONT,
+              text: t.subtitle, italics: true, color: '64748B', size: 20, font: FONT_DOCX,
             })],
           }),
 
-          titulo('1. Resumen operación'),
-          parrafo(t.intro),
-          tablaDatos([
+          tituloDocx('1. Resumen operación'),
+          parrafoDocx(t.intro),
+          tablaDatosDocx([
             ['Capital Hipotecario', eur(d.capitalHipotecario)],
             ['Cuota Mensual Estimada', eur(d.cuotaMensual)],
             ['Ratio de Endeudamiento', pct(d.ratioEndeudamiento)],
             ['LTV (Financiación)', pct(d.ltv) + (d.precioVenta ? ' sobre el precio de venta' : '')],
           ]),
 
-          titulo('2. Detalles de la Inversión'),
-          parrafo('El presupuesto total de inversión se desglosa para garantizar total transparencia en cada paso de la compraventa.'),
-          tablaDatos([
+          tituloDocx('2. Detalles de la Inversión'),
+          parrafoDocx('El presupuesto total de inversión se desglosa para garantizar total transparencia en cada paso de la compraventa.'),
+          tablaDatosDocx([
             ['Precio de venta', eur(d.precioVenta)],
             ['Valor de tasación objetivo', eur(d.valorTasacion)],
             ['Capital hipotecario', eur(d.capitalHipotecario)],
           ]),
 
-          titulo('3. Condiciones de la Hipoteca'),
-          parrafo(t.condiciones),
-          vineta(`Periodo (${d.plazoAnos || '—'} años): Tipo de interés ${d.tipoInteres || 'Fija'} al ${pct(d.tin)} TIN.`),
-          vineta(`Vinculaciones: ${d.vinculaciones || '—'}.`),
+          tituloDocx('3. Condiciones de la Hipoteca'),
+          parrafoDocx(t.condiciones),
+          vinetaDocx(`Periodo (${d.plazoAnos || '—'} años): Tipo de interés ${d.tipoInteres || 'Fija'} al ${pct(d.tin)} TIN.`),
+          vinetaDocx(`Vinculaciones: ${d.vinculaciones || '—'}.`),
 
-          titulo('4. Aportación y Ahorros'),
-          parrafo(`Gracias a la estructura de financiación diseñada (LTV ${pct(d.ltv)}), la aportación de ahorros es la escogida, permitiéndote conservar capital para el futuro.`),
-          vineta(`Ahorros del Cliente: ${eur(d.ahorrosCliente)}.`),
-          vineta(`Arras / PYS: ${eur(d.arrasPys)}.`),
-          vineta(`Valor de Tasación Objetivo confirmado: ${eur(d.valorTasacion)}.`),
+          tituloDocx('4. Aportación y Ahorros'),
+          parrafoDocx(`Gracias a la estructura de financiación diseñada (LTV ${pct(d.ltv)}), la aportación de ahorros es la escogida, permitiéndote conservar capital para el futuro.`),
+          vinetaDocx(`Ahorros del Cliente: ${eur(d.ahorrosCliente)}.`),
+          vinetaDocx(`Arras / PYS: ${eur(d.arrasPys)}.`),
+          vinetaDocx(`Valor de Tasación Objetivo confirmado: ${eur(d.valorTasacion)}.`),
 
-          titulo('¿Por qué esta es vuestra mejor opción?'),
-          parrafo(t.conclusion),
+          tituloDocx('¿Por qué esta es vuestra mejor opción?'),
+          parrafoDocx(t.conclusion),
         ],
       }],
     });
+  }
+
+  // =========================================================
+  // ================  PDF (pdfmake)  ========================
+  // =========================================================
+  // Construye las filas [clave, valor] de una tabla en formato pdfmake
+  function filasTabla(rows) {
+    return rows.map(([k, v]) => ([
+      { text: k, bold: true, fillColor: COLOR_HEADER_BG, color: COLOR_TEXT },
+      { text: v, color: COLOR_TEXT },
+    ]));
+  }
+
+  function tablaLayout() {
+    // Layout con bordes finos gris claro, sin relleno por defecto
+    return {
+      hLineWidth: () => 0.5,
+      vLineWidth: () => 0.5,
+      hLineColor: () => COLOR_BORDER,
+      vLineColor: () => COLOR_BORDER,
+      paddingLeft: () => 8,
+      paddingRight: () => 8,
+      paddingTop: () => 5,
+      paddingBottom: () => 5,
+    };
+  }
+
+  function construirDocDefinitionPDF(d) {
+    const t = textos(d);
+
+    return {
+      pageSize: 'A4',
+      pageMargins: [56, 56, 56, 56],   // ~2 cm
+      defaultStyle: {
+        font: 'Roboto',
+        fontSize: 11,
+        color: COLOR_TEXT,
+        lineHeight: 1.35,
+      },
+      styles: {
+        title: {
+          fontSize: 18,
+          bold: true,
+          color: COLOR_PRIMARY,
+          alignment: 'center',
+          margin: [0, 0, 0, 4],
+        },
+        subtitle: {
+          fontSize: 10,
+          italics: true,
+          color: COLOR_MUTED,
+          alignment: 'center',
+          margin: [0, 0, 0, 24],
+        },
+        h2: {
+          fontSize: 14,
+          bold: true,
+          color: COLOR_PRIMARY,
+          margin: [0, 18, 0, 8],
+        },
+        body: {
+          fontSize: 11,
+          margin: [0, 0, 0, 6],
+        },
+        bullet: {
+          fontSize: 11,
+          margin: [0, 0, 0, 3],
+        },
+      },
+      content: [
+        { text: 'Propuesta de Financiación Hipotecaria', style: 'title' },
+        { text: t.subtitle, style: 'subtitle' },
+
+        { text: '1. Resumen operación', style: 'h2' },
+        { text: t.intro, style: 'body' },
+        {
+          table: {
+            widths: ['40%', '60%'],
+            body: filasTabla([
+              ['Capital Hipotecario', eur(d.capitalHipotecario)],
+              ['Cuota Mensual Estimada', eur(d.cuotaMensual)],
+              ['Ratio de Endeudamiento', pct(d.ratioEndeudamiento)],
+              ['LTV (Financiación)', pct(d.ltv) + (d.precioVenta ? ' sobre el precio de venta' : '')],
+            ]),
+          },
+          layout: tablaLayout(),
+          margin: [0, 4, 0, 8],
+        },
+
+        { text: '2. Detalles de la Inversión', style: 'h2' },
+        { text: 'El presupuesto total de inversión se desglosa para garantizar total transparencia en cada paso de la compraventa.', style: 'body' },
+        {
+          table: {
+            widths: ['40%', '60%'],
+            body: filasTabla([
+              ['Precio de venta', eur(d.precioVenta)],
+              ['Valor de tasación objetivo', eur(d.valorTasacion)],
+              ['Capital hipotecario', eur(d.capitalHipotecario)],
+            ]),
+          },
+          layout: tablaLayout(),
+          margin: [0, 4, 0, 8],
+        },
+
+        { text: '3. Condiciones de la Hipoteca', style: 'h2' },
+        { text: t.condiciones, style: 'body' },
+        { ul: [
+          `Periodo (${d.plazoAnos || '—'} años): Tipo de interés ${d.tipoInteres || 'Fija'} al ${pct(d.tin)} TIN.`,
+          `Vinculaciones: ${d.vinculaciones || '—'}.`,
+        ], margin: [0, 2, 0, 8] },
+
+        { text: '4. Aportación y Ahorros', style: 'h2' },
+        { text: `Gracias a la estructura de financiación diseñada (LTV ${pct(d.ltv)}), la aportación de ahorros es la escogida, permitiéndote conservar capital para el futuro.`, style: 'body' },
+        { ul: [
+          `Ahorros del Cliente: ${eur(d.ahorrosCliente)}.`,
+          `Arras / PYS: ${eur(d.arrasPys)}.`,
+          `Valor de Tasación Objetivo confirmado: ${eur(d.valorTasacion)}.`,
+        ], margin: [0, 2, 0, 8] },
+
+        { text: '¿Por qué esta es vuestra mejor opción?', style: 'h2' },
+        { text: t.conclusion, style: 'body' },
+      ],
+      // Metadatos
+      info: {
+        title: `Propuesta de financiación hipotecaria - ${d.nombreCliente || ''}`,
+        author: 'Generador de Propuestas',
+        creator: 'Generador de Propuestas',
+      },
+    };
   }
 
   // ---------- Descargas ----------
@@ -298,7 +433,6 @@
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-
   function nombreArchivo(ext) {
     const base = (ultimosDatos?.nombreCliente || 'cliente').replace(/\s+/g, '_');
     return `Propuesta_${base}_${new Date().getFullYear()}.${ext}`;
@@ -310,7 +444,7 @@
     btnGenerar.disabled = true;
     btnGenerar.textContent = 'Generando…';
     try {
-      const doc = construirDocumento(ultimosDatos);
+      const doc = construirDocumentoDOCX(ultimosDatos);
       const blob = await Packer.toBlob(doc);
       descargarBlob(blob, nombreArchivo('docx'));
     } catch (err) {
@@ -322,45 +456,18 @@
     }
   }
 
-  async function descargarPDF() {
+  function descargarPDF() {
     if (!ultimosDatos) return;
     const orig = btnPDF.textContent;
     btnPDF.disabled = true;
     btnPDF.textContent = 'Generando…';
-
-    // Clonar la vista previa en un contenedor off-screen para capturarla limpia
-    const clone = previewContent.cloneNode(true);
-    clone.style.padding = '0';
-    clone.style.width = 'auto';
-    clone.style.maxWidth = 'none';
-    clone.style.boxShadow = 'none';
-    clone.style.borderRadius = '0';
-
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText =
-      'position:fixed;left:-10000px;top:0;width:186mm;background:#ffffff;';
-    wrapper.appendChild(clone);
-    document.body.appendChild(wrapper);
-
     try {
-      await html2pdf().set({
-        margin: [12, 12, 12, 12],              // mm
-        filename: nombreArchivo('pdf'),
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'legacy'] },
-      }).from(clone).save();
+      const dd = construirDocDefinitionPDF(ultimosDatos);
+      pdfMake.createPdf(dd).download(nombreArchivo('pdf'));
     } catch (err) {
       console.error(err);
       alert('Error al generar el PDF: ' + err.message);
     } finally {
-      document.body.removeChild(wrapper);
       btnPDF.disabled = false;
       btnPDF.textContent = orig;
     }
@@ -381,7 +488,6 @@
     if (e.key === 'Escape' && !modal.hidden) cerrarModal();
   });
 
-  // ---------- Init ----------
   document.addEventListener('DOMContentLoaded', () => {
     cargarBorrador();
     if (!form.elements.fechaDocumento.value) {

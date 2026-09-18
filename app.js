@@ -2,34 +2,16 @@
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
           WidthType, AlignmentType, BorderStyle, ShadingType, HeadingLevel } = window.docx;
 
-  // pdfmake fonts
-  if (window.pdfMake && window.pdfMake.vfs) {
-    pdfMake.fonts = {
-      Roboto: {
-        normal: 'Roboto-Regular.ttf',
-        bold: 'Roboto-Medium.ttf',
-        italics: 'Roboto-Italic.ttf',
-        bolditalics: 'Roboto-MediumItalic.ttf',
-      },
-    };
-  }
-
   const form = document.getElementById('formPropuesta');
   const modal = document.getElementById('previewModal');
   const previewContent = document.getElementById('previewContent');
   const btnPreview = document.getElementById('btnPreview');
   const btnLimpiar = document.getElementById('btnLimpiar');
   const btnGenerar = document.getElementById('btnGenerar');
-  const btnPDF = document.getElementById('btnPDF');
   const btnClose = document.getElementById('btnClose');
 
   const STORAGE_KEY = 'propuesta_borrador_v1';
   const FONT_DOCX = 'Aptos, Calibri, Segoe UI, sans-serif';
-  const COLOR_PRIMARY = '#1E3A8A';
-  const COLOR_MUTED = '#64748B';
-  const COLOR_TEXT = '#1E293B';
-  const COLOR_BORDER = '#CBD5E1';
-  const COLOR_HEADER_BG = '#F1F5F9';
 
   let ultimosDatos = null;
 
@@ -293,136 +275,7 @@
     });
   }
 
-  // =========================================================
-  // ================  PDF (pdfmake)  ========================
-  // =========================================================
-  // Construye las filas [clave, valor] de una tabla en formato pdfmake
-  function filasTabla(rows) {
-    return rows.map(([k, v]) => ([
-      { text: k, bold: true, fillColor: COLOR_HEADER_BG, color: COLOR_TEXT },
-      { text: v, color: COLOR_TEXT },
-    ]));
-  }
-
-  function tablaLayout() {
-    // Layout con bordes finos gris claro, sin relleno por defecto
-    return {
-      hLineWidth: () => 0.5,
-      vLineWidth: () => 0.5,
-      hLineColor: () => COLOR_BORDER,
-      vLineColor: () => COLOR_BORDER,
-      paddingLeft: () => 8,
-      paddingRight: () => 8,
-      paddingTop: () => 5,
-      paddingBottom: () => 5,
-    };
-  }
-
-  function construirDocDefinitionPDF(d) {
-    const t = textos(d);
-
-    return {
-      pageSize: 'A4',
-      pageMargins: [56, 56, 56, 56],   // ~2 cm
-      defaultStyle: {
-        font: 'Roboto',
-        fontSize: 11,
-        color: COLOR_TEXT,
-        lineHeight: 1.35,
-      },
-      styles: {
-        title: {
-          fontSize: 18,
-          bold: true,
-          color: COLOR_PRIMARY,
-          alignment: 'center',
-          margin: [0, 0, 0, 4],
-        },
-        subtitle: {
-          fontSize: 10,
-          italics: true,
-          color: COLOR_MUTED,
-          alignment: 'center',
-          margin: [0, 0, 0, 24],
-        },
-        h2: {
-          fontSize: 14,
-          bold: true,
-          color: COLOR_PRIMARY,
-          margin: [0, 18, 0, 8],
-        },
-        body: {
-          fontSize: 11,
-          margin: [0, 0, 0, 6],
-        },
-        bullet: {
-          fontSize: 11,
-          margin: [0, 0, 0, 3],
-        },
-      },
-      content: [
-        { text: 'Propuesta de Financiación Hipotecaria', style: 'title' },
-        { text: t.subtitle, style: 'subtitle' },
-
-        { text: '1. Resumen operación', style: 'h2' },
-        { text: t.intro, style: 'body' },
-        {
-          table: {
-            widths: ['40%', '60%'],
-            body: filasTabla([
-              ['Capital Hipotecario', eur(d.capitalHipotecario)],
-              ['Cuota Mensual Estimada', eur(d.cuotaMensual)],
-              ['Ratio de Endeudamiento', pct(d.ratioEndeudamiento)],
-              ['LTV (Financiación)', pct(d.ltv) + (d.precioVenta ? ' sobre el precio de venta' : '')],
-            ]),
-          },
-          layout: tablaLayout(),
-          margin: [0, 4, 0, 8],
-        },
-
-        { text: '2. Detalles de la Inversión', style: 'h2' },
-        { text: 'El presupuesto total de inversión se desglosa para garantizar total transparencia en cada paso de la compraventa.', style: 'body' },
-        {
-          table: {
-            widths: ['40%', '60%'],
-            body: filasTabla([
-              ['Precio de venta', eur(d.precioVenta)],
-              ['Valor de tasación objetivo', eur(d.valorTasacion)],
-              ['Capital hipotecario', eur(d.capitalHipotecario)],
-            ]),
-          },
-          layout: tablaLayout(),
-          margin: [0, 4, 0, 8],
-        },
-
-        { text: '3. Condiciones de la Hipoteca', style: 'h2' },
-        { text: t.condiciones, style: 'body' },
-        { ul: [
-          `Periodo (${d.plazoAnos || '—'} años): Tipo de interés ${d.tipoInteres || 'Fija'} al ${pct(d.tin)} TIN.`,
-          `Vinculaciones: ${d.vinculaciones || '—'}.`,
-        ], margin: [0, 2, 0, 8] },
-
-        { text: '4. Aportación y Ahorros', style: 'h2' },
-        { text: `Gracias a la estructura de financiación diseñada (LTV ${pct(d.ltv)}), la aportación de ahorros es la escogida, permitiéndote conservar capital para el futuro.`, style: 'body' },
-        { ul: [
-          `Ahorros del Cliente: ${eur(d.ahorrosCliente)}.`,
-          `Arras / PYS: ${eur(d.arrasPys)}.`,
-          `Valor de Tasación Objetivo confirmado: ${eur(d.valorTasacion)}.`,
-        ], margin: [0, 2, 0, 8] },
-
-        { text: '¿Por qué esta es vuestra mejor opción?', style: 'h2' },
-        { text: t.conclusion, style: 'body' },
-      ],
-      // Metadatos
-      info: {
-        title: `Propuesta de financiación hipotecaria - ${d.nombreCliente || ''}`,
-        author: 'Generador de Propuestas',
-        creator: 'Generador de Propuestas',
-      },
-    };
-  }
-
-  // ---------- Descargas ----------
+  // ---------- Descarga ----------
   function descargarBlob(blob, nombre) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -456,30 +309,12 @@
     }
   }
 
-  function descargarPDF() {
-    if (!ultimosDatos) return;
-    const orig = btnPDF.textContent;
-    btnPDF.disabled = true;
-    btnPDF.textContent = 'Generando…';
-    try {
-      const dd = construirDocDefinitionPDF(ultimosDatos);
-      pdfMake.createPdf(dd).download(nombreArchivo('pdf'));
-    } catch (err) {
-      console.error(err);
-      alert('Error al generar el PDF: ' + err.message);
-    } finally {
-      btnPDF.disabled = false;
-      btnPDF.textContent = orig;
-    }
-  }
-
   // ---------- Eventos ----------
   form.addEventListener('input', guardarBorrador);
   form.addEventListener('change', guardarBorrador);
   btnPreview.addEventListener('click', abrirModal);
   btnLimpiar.addEventListener('click', limpiarFormulario);
   btnGenerar.addEventListener('click', descargarDOCX);
-  btnPDF.addEventListener('click', descargarPDF);
   btnClose.addEventListener('click', cerrarModal);
   modal.addEventListener('click', (e) => {
     if (e.target.matches('[data-close]')) cerrarModal();

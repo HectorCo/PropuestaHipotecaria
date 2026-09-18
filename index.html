@@ -13,7 +13,7 @@
 <body>
   <header class="app-header">
     <h1>Propuesta de Financiación Hipotecaria</h1>
-    <p>Rellena los datos y genera el documento Word</p>
+    <p>Rellena los datos y genera el documento en Word o PDF</p>
   </header>
 
   <main>
@@ -26,7 +26,7 @@
         <label>Fecha del documento
           <input type="date" name="fechaDocumento" />
         </label>
-        <label>Comercial / Entidad
+        <label class="full">Comercial / Entidad
           <input type="text" name="comercial" placeholder="Ej. Banco Ejemplo" />
         </label>
       </fieldset>
@@ -85,26 +85,42 @@
         <label>Arras / PYS (€)
           <input type="text" name="arrasPys" placeholder="28.300,00" />
         </label>
-        <label>Valor de tasación objetivo (€)
+        <label class="full">Valor de tasación objetivo (€)
           <input type="text" name="valorTasacion" placeholder="233.450,00" />
         </label>
       </fieldset>
 
       <fieldset>
         <legend>Textos personalizables (opcional)</legend>
-        <label>Párrafo de conclusión
+        <label class="full">Párrafo de conclusión
           <textarea name="textoConclusion" rows="3" placeholder="Déjalo vacío para usar el texto por defecto"></textarea>
         </label>
       </fieldset>
 
       <div class="actions">
-        <button type="button" id="btnGenerar" class="btn-primary">Generar documento</button>
+        <button type="button" id="btnPreview" class="btn-primary">Vista previa</button>
         <button type="button" id="btnLimpiar" class="btn-secondary">Limpiar formulario</button>
       </div>
     </form>
   </main>
 
+  <!-- Modal de vista previa -->
+  <div id="previewModal" class="modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel">
+      <div class="modal-toolbar">
+        <button type="button" id="btnGenerar" class="btn-primary">Descargar DOCX</button>
+        <button type="button" id="btnPDF" class="btn-primary">Descargar PDF</button>
+        <button type="button" id="btnClose" class="btn-secondary" data-close>Cerrar</button>
+      </div>
+      <div class="modal-body">
+        <div id="previewContent" class="doc-preview"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

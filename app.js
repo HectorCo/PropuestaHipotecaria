@@ -128,10 +128,6 @@
     }
 
     return {
-      intro:
-        `Tras un análisis exhaustivo de vuestro perfil financiero, nos complace comunicaros que la operación ` +
-        `ha sido calificada como ${d.calificacion || 'VIABLE'}. Esta propuesta destaca por ofrecer una financiación ` +
-        `de (${pct(d.ltv)} LTV).`,
       condiciones,
       detalleCondiciones,
       conclusion: (d.textoConclusion || '').trim() || conclusionDefault,
@@ -149,7 +145,6 @@
       <p class="doc-subtitle">${esc(t.subtitle)}</p>
 
       <h2>1. Resumen operación</h2>
-      <p>${esc(t.intro)}</p>
       <table class="doc-table">
         ${row('Capital Hipotecario', eur(d.capitalHipotecario))}
         ${row('Cuota Mensual Estimada', eur(d.cuotaMensual))}
@@ -158,11 +153,12 @@
       </table>
 
       <h2>2. Detalles de la Inversión</h2>
-      <p>El presupuesto total de inversión se desglosa para garantizar total transparencia en cada paso de la compraventa.</p>
       <table class="doc-table">
-        ${row('Precio de venta', eur(d.precioVenta))}
+        ${row('Precio de venta', eur(d.precioVentaInv))}
         ${row('Valor de tasación objetivo', eur(d.valorTasacion))}
-        ${row('Capital hipotecario', eur(d.capitalHipotecario))}
+        ${row('Capital hipotecario', eur(d.capitalHipotecarioInv))}
+        ${row('Honorarios de Gestión y Agencia', eur(d.honorariosGestion))}
+        ${row('Gastos (Notario, Registro, Gestoría, Tasación y Seguros)', eur(d.gastosTotales))}
       </table>
 
       <h2>3. Condiciones de la Hipoteca</h2>
@@ -172,11 +168,9 @@
       </ul>
 
       <h2>4. Aportación y Ahorros</h2>
-      <p>Gracias a la estructura de financiación diseñada (LTV ${esc(pct(d.ltv))}), la aportación de ahorros es la escogida, permitiéndote conservar capital para el futuro.</p>
       <ul>
         <li>Ahorros del Cliente: ${esc(eur(d.ahorrosCliente))}.</li>
         <li>Arras / PYS: ${esc(eur(d.arrasPys))}.</li>
-        <li>Valor de Tasación Objetivo confirmado: ${esc(eur(d.valorTasacion))}.</li>
       </ul>
 
       <h2>¿Por qué esta es vuestra mejor opción?</h2>
@@ -296,7 +290,6 @@
           }),
 
           tituloDocx('1. Resumen operación'),
-          parrafoDocx(t.intro),
           tablaDatosDocx([
             ['Capital Hipotecario', eur(d.capitalHipotecario)],
             ['Cuota Mensual Estimada', eur(d.cuotaMensual)],
@@ -305,11 +298,12 @@
           ]),
 
           tituloDocx('2. Detalles de la Inversión'),
-          parrafoDocx('El presupuesto total de inversión se desglosa para garantizar total transparencia en cada paso de la compraventa.'),
           tablaDatosDocx([
-            ['Precio de venta', eur(d.precioVenta)],
+            ['Precio de venta', eur(d.precioVentaInv)],
             ['Valor de tasación objetivo', eur(d.valorTasacion)],
-            ['Capital hipotecario', eur(d.capitalHipotecario)],
+            ['Capital hipotecario', eur(d.capitalHipotecarioInv)],
+            ['Honorarios de Gestión y Agencia', eur(d.honorariosGestion)],
+            ['Gastos (Notario, Registro, Gestoría, Tasación y Seguros)', eur(d.gastosTotales)],
           ]),
 
           tituloDocx('3. Condiciones de la Hipoteca'),
@@ -317,10 +311,8 @@
           ...t.detalleCondiciones.map(vinetaDocx),
 
           tituloDocx('4. Aportación y Ahorros'),
-          parrafoDocx(`Gracias a la estructura de financiación diseñada (LTV ${pct(d.ltv)}), la aportación de ahorros es la escogida, permitiéndote conservar capital para el futuro.`),
           vinetaDocx(`Ahorros del Cliente: ${eur(d.ahorrosCliente)}.`),
           vinetaDocx(`Arras / PYS: ${eur(d.arrasPys)}.`),
-          vinetaDocx(`Valor de Tasación Objetivo confirmado: ${eur(d.valorTasacion)}.`),
 
           tituloDocx('¿Por qué esta es vuestra mejor opción?'),
           parrafoDocx(t.conclusion),

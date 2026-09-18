@@ -1,8 +1,4 @@
-// propuesta-pwa/sw.js
-
-// 1. Cambia la versión de la caché cada vez que hagas un despliegue importante.
-//    Esto fuerza al navegador a ver este archivo como nuevo.
-const CACHE = 'propuesta-hipotecaria-v6'; 
+const CACHE = 'propuesta-hipotecaria-v7';
 
 const ASSETS = [
   './',
@@ -25,14 +21,18 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // 2. Estrategia "Network-First" para archivos críticos.
-  //    Intenta buscar en la red primero. Si falla, usa la caché.
-  //    Esto se aplica a la navegación, HTML, JS y CSS.
+  // Network-first para HTML/JS/CSS: siempre busca versión nueva
   if (
     event.request.mode === 'navigate' ||
     url.pathname.endsWith('.html') ||
@@ -42,21 +42,16 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((res) => {
-          // Guarda una copia en caché para futuras peticiones offline.
           const clone = res.clone();
           caches.open(CACHE).then((cache) => cache.put(event.request, clone));
           return res;
         })
-        .catch(() => {
-          // Si falla la red, intenta servir desde la caché.
-          return caches.match(event.request).then((r) => r || caches.match('./index.html'));
-        })
+        .catch(() => caches.match(event.request).then((r) => r || caches.match('./index.html')))
     );
     return;
   }
 
-  // 3. Estrategia "Cache-First" para el resto (iconos, librerías CDN).
-  //    Estos cambian muy poco, así que priorizamos la velocidad de la caché.
+  // Cache-first para el resto
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;

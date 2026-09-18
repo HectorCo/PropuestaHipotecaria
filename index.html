@@ -72,6 +72,30 @@
         <label>Plazo (años)
           <input type="text" name="plazoAnos" placeholder="30" />
         </label>
+
+        <!-- Bloque condicional: solo se muestra si tipoInteres === "Mixta" -->
+        <div id="bloqueMixta" class="bloque-mixta" hidden>
+          <p class="bloque-titulo">Detalles de la parte mixta</p>
+
+          <label>Años a tipo fijo
+            <input type="text" name="periodoFijoAnos" placeholder="10" />
+          </label>
+          <label>TIN fijo (%)
+            <input type="text" name="tinFijo" placeholder="2,20" />
+          </label>
+          <label>Índice variable
+            <select name="indiceVariable">
+              <option value="Euríbor 12M">Euríbor 12M</option>
+              <option value="Euríbor 6M">Euríbor 6M</option>
+              <option value="Euríbor 3M">Euríbor 3M</option>
+              <option value="IRPH">IRPH</option>
+            </select>
+          </label>
+          <label>Diferencial (%)
+            <input type="text" name="diferencialVariable" placeholder="0,75" />
+          </label>
+        </div>
+
         <label>Vinculaciones
           <input type="text" name="vinculaciones" placeholder="Nómina, seguro de vida y seguro de hogar" />
         </label>

@@ -1,4 +1,4 @@
-const CACHE = 'propuesta-hipotecaria-v3';
+const CACHE = 'propuesta-hipotecaria-v4';
 
 const ASSETS = [
   './',
@@ -8,8 +8,6 @@ const ASSETS = [
   './manifest.json',
   './icon.svg',
   'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js',
-  'https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/pdfmake.min.js',
-  'https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/vfs_fonts.js',
 ];
 
 self.addEventListener('install', (event) => {

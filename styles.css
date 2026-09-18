@@ -11,7 +11,7 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Aptos', Calibri, 'Segoe UI', system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
@@ -104,13 +104,14 @@ button {
 }
 
 button:active { transform: scale(.98); }
+button:disabled { opacity: .6; cursor: wait; }
 
 .btn-primary {
   background: var(--primary);
   color: #fff;
   box-shadow: 0 4px 14px rgba(30, 58, 138, .25);
 }
-.btn-primary:hover { background: #172a63; }
+.btn-primary:hover:not(:disabled) { background: #172a63; }
 
 .btn-secondary {
   background: #fff;
@@ -119,7 +120,133 @@ button:active { transform: scale(.98); }
 }
 .btn-secondary:hover { background: #f8fafc; }
 
+/* ---------- Modal ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.modal[hidden] { display: none; }
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .55);
+  backdrop-filter: blur(2px);
+}
+
+.modal-panel {
+  position: relative;
+  background: #f8fafc;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, .35);
+}
+
+.modal-toolbar {
+  display: flex;
+  gap: .5rem;
+  padding: .75rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.modal-toolbar button { padding: .6rem 1.1rem; }
+
+.modal-body {
+  overflow: auto;
+  padding: 1rem;
+  background: #e2e8f0;
+}
+
+/* ---------- Documento (vista previa) ---------- */
+.doc-preview {
+  background: #fff;
+  font-family: 'Aptos', Calibri, 'Segoe UI', system-ui, sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: #1e293b;
+  padding: 2cm 2.2cm;
+  width: 21cm;
+  max-width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, .12);
+  border-radius: 4px;
+}
+
+.doc-preview .doc-title {
+  font-size: 20pt;
+  color: #1E3A8A;
+  text-align: center;
+  margin: 0 0 6pt;
+  font-weight: 700;
+}
+
+.doc-preview .doc-subtitle {
+  text-align: center;
+  color: #64748B;
+  font-style: italic;
+  font-size: 10pt;
+  margin: 0 0 24pt;
+}
+
+.doc-preview h2 {
+  font-size: 14pt;
+  color: #1E3A8A;
+  margin: 18pt 0 8pt;
+  font-weight: 700;
+}
+
+.doc-preview p { margin: 6pt 0; }
+.doc-preview ul { margin: 6pt 0 6pt 18pt; padding: 0; }
+.doc-preview li { margin-bottom: 3pt; }
+
+.doc-preview .doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8pt 0 12pt;
+  font-size: 10.5pt;
+}
+.doc-preview .doc-table th,
+.doc-preview .doc-table td {
+  border: 1px solid #CBD5E1;
+  padding: 6pt 8pt;
+  text-align: left;
+  vertical-align: top;
+}
+.doc-preview .doc-table th {
+  background: #F1F5F9;
+  font-weight: 600;
+  width: 40%;
+}
+
+/* Impresión directa con Ctrl+P (si el modal está abierto) */
+@media print {
+  body { background: #fff; padding: 0; max-width: none; }
+  .app-header, form, .modal-toolbar, .modal-backdrop { display: none !important; }
+  .modal { position: static; padding: 0; display: block !important; }
+  .modal[hidden] { display: block !important; }
+  .modal-panel { box-shadow: none; max-height: none; border-radius: 0; }
+  .modal-body { padding: 0; background: #fff; overflow: visible; }
+  .doc-preview { box-shadow: none; border-radius: 0; width: auto; padding: 1.5cm; }
+}
+
 @media (max-width: 600px) {
   fieldset { grid-template-columns: 1fr; }
   .app-header h1 { font-size: 1.25rem; }
+  .modal { padding: 0; }
+  .modal-panel { max-height: 100vh; border-radius: 0; }
+  .modal-toolbar { justify-content: center; }
 }

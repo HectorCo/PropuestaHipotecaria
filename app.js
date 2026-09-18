@@ -10,6 +10,10 @@
   const btnGenerar = document.getElementById('btnGenerar');
   const btnClose = document.getElementById('btnClose');
 
+  // Bloque condicional "Mixta"
+  const bloqueMixta = document.getElementById('bloqueMixta');
+  const selectTipoInteres = form.elements.tipoInteres;
+
   const STORAGE_KEY = 'propuesta_borrador_v1';
   const FONT_DOCX = 'Aptos, Calibri, Segoe UI, sans-serif';
 
@@ -47,6 +51,7 @@
     for (const el of form.elements) if (el.name) datos[el.name] = el.value;
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(datos)); } catch (_) {}
   }
+
   function cargarBorrador() {
     try {
       const datos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
@@ -56,16 +61,31 @@
       }
     } catch (_) {}
   }
+
   function limpiarFormulario() {
     if (!confirm('¿Borrar todos los datos del formulario?')) return;
     form.reset();
     localStorage.removeItem(STORAGE_KEY);
     form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
+    actualizarBloqueMixta();
   }
+
   function leerDatos() {
     const d = {};
     for (const el of form.elements) if (el.name) d[el.name] = (el.value || '').trim();
     return d;
+  }
+
+  // ---------- Visibilidad del bloque "Mixta" ----------
+  function actualizarBloqueMixta() {
+    const esMixta = selectTipoInteres.value === 'Mixta';
+    bloqueMixta.hidden = !esMixta;
+    if (!esMixta) {
+      ['periodoFijoAnos', 'tinFijo', 'diferencialVariable'].forEach((n) => {
+        if (form.elements[n]) form.elements[n].value = '';
+      });
+      if (form.elements.indiceVariable) form.elements.indiceVariable.value = 'Euríbor 12M';
+    }
   }
 
   // ---------- Textos comunes ----------
@@ -73,14 +93,47 @@
     const conclusionDefault =
       `Esta propuesta equilibra una cuota mensual cómoda (el ${pct(d.ratioEndeudamiento)} de tus ingresos) ` +
       `con una financiación máxima. Es una oportunidad sólida para adquirir tu hogar con total seguridad financiera.`;
+
+    let condiciones;
+    let detalleCondiciones = [];
+
+    if (d.tipoInteres === 'Mixta') {
+      const aniosFijos = d.periodoFijoAnos || '—';
+      const aniosVariables = (() => {
+        const tot = parseInt(d.plazoAnos, 10);
+        const fij = parseInt(d.periodoFijoAnos, 10);
+        return (!isNaN(tot) && !isNaN(fij) && tot > fij) ? String(tot - fij) : '—';
+      })();
+
+      condiciones =
+        `Hemos seleccionado una modalidad Mixta: un primer periodo a tipo fijo que te protege ` +
+        `frente a las subidas de tipos, seguido de un periodo a tipo variable referenciado al ` +
+        `${d.indiceVariable || 'Euríbor 12M'} más un diferencial.`;
+
+      detalleCondiciones = [
+        `Periodo fijo (${aniosFijos} años): TIN fijo al ${pct(d.tinFijo)}.`,
+        `Periodo variable (${aniosVariables} años): ${d.indiceVariable || 'Euríbor 12M'} + ${pct(d.diferencialVariable)}.`,
+        `Plazo total: ${d.plazoAnos || '—'} años.`,
+        `Vinculaciones: ${d.vinculaciones || '—'}.`,
+      ];
+    } else {
+      condiciones =
+        `Hemos seleccionado una modalidad ${d.tipoInteres || 'Fija'} que te protege frente a la volatilidad ` +
+        `del mercado durante toda la vida de la hipoteca.`;
+
+      detalleCondiciones = [
+        `Periodo (${d.plazoAnos || '—'} años): Tipo de interés ${d.tipoInteres || 'Fija'} al ${pct(d.tin)} TIN.`,
+        `Vinculaciones: ${d.vinculaciones || '—'}.`,
+      ];
+    }
+
     return {
       intro:
         `Tras un análisis exhaustivo de vuestro perfil financiero, nos complace comunicaros que la operación ` +
         `ha sido calificada como ${d.calificacion || 'VIABLE'}. Esta propuesta destaca por ofrecer una financiación ` +
         `de (${pct(d.ltv)} LTV).`,
-      condiciones:
-        `Hemos seleccionado una modalidad ${d.tipoInteres || 'Fija'} que te protege frente a la volatilidad ` +
-        `del mercado durante toda la vida de la hipoteca.`,
+      condiciones,
+      detalleCondiciones,
       conclusion: (d.textoConclusion || '').trim() || conclusionDefault,
       subtitle: [d.nombreCliente, d.fechaDocumento ? fmtFecha(d.fechaDocumento) : '']
         .filter(Boolean).join(' · '),
@@ -115,8 +168,7 @@
       <h2>3. Condiciones de la Hipoteca</h2>
       <p>${esc(t.condiciones)}</p>
       <ul>
-        <li>Periodo (${esc(d.plazoAnos || '—')} años): Tipo de interés ${esc(d.tipoInteres || 'Fija')} al ${esc(pct(d.tin))} TIN.</li>
-        <li>Vinculaciones: ${esc(d.vinculaciones || '—')}.</li>
+        ${t.detalleCondiciones.map((v) => `<li>${esc(v)}</li>`).join('')}
       </ul>
 
       <h2>4. Aportación y Ahorros</h2>
@@ -146,6 +198,7 @@
     document.body.style.overflow = 'hidden';
     modal.querySelector('.modal-body').scrollTop = 0;
   }
+
   function cerrarModal() {
     modal.hidden = true;
     document.body.style.overflow = '';
@@ -192,12 +245,14 @@
       children: [new TextRun({ text: texto, bold: true, color: '1E3A8A', size: 26, font: FONT_DOCX })],
     });
   }
+
   function parrafoDocx(texto) {
     return new Paragraph({
       spacing: { after: 120 },
       children: [new TextRun({ text: texto, size: 22, font: FONT_DOCX })],
     });
   }
+
   function vinetaDocx(texto) {
     return new Paragraph({
       bullet: { level: 0 },
@@ -259,8 +314,7 @@
 
           tituloDocx('3. Condiciones de la Hipoteca'),
           parrafoDocx(t.condiciones),
-          vinetaDocx(`Periodo (${d.plazoAnos || '—'} años): Tipo de interés ${d.tipoInteres || 'Fija'} al ${pct(d.tin)} TIN.`),
-          vinetaDocx(`Vinculaciones: ${d.vinculaciones || '—'}.`),
+          ...t.detalleCondiciones.map(vinetaDocx),
 
           tituloDocx('4. Aportación y Ahorros'),
           parrafoDocx(`Gracias a la estructura de financiación diseñada (LTV ${pct(d.ltv)}), la aportación de ahorros es la escogida, permitiéndote conservar capital para el futuro.`),
@@ -286,6 +340,7 @@
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+
   function nombreArchivo(ext) {
     const base = (ultimosDatos?.nombreCliente || 'cliente').replace(/\s+/g, '_');
     return `Propuesta_${base}_${new Date().getFullYear()}.${ext}`;
@@ -312,6 +367,7 @@
   // ---------- Eventos ----------
   form.addEventListener('input', guardarBorrador);
   form.addEventListener('change', guardarBorrador);
+  selectTipoInteres.addEventListener('change', actualizarBloqueMixta);
   btnPreview.addEventListener('click', abrirModal);
   btnLimpiar.addEventListener('click', limpiarFormulario);
   btnGenerar.addEventListener('click', descargarDOCX);
@@ -323,16 +379,34 @@
     if (e.key === 'Escape' && !modal.hidden) cerrarModal();
   });
 
+  // ---------- Init ----------
   document.addEventListener('DOMContentLoaded', () => {
     cargarBorrador();
     if (!form.elements.fechaDocumento.value) {
       form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
     }
+    actualizarBloqueMixta();
   });
 
+  // Service Worker con auto-actualización
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW error:', e));
+    window.addEventListener('load', async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('sw.js');
+        reg.update();
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        reg.addEventListener('updatefound', () => {
+          const nuevo = reg.installing;
+          if (!nuevo) return;
+          nuevo.addEventListener('statechange', () => {
+            if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
+              window.location.reload();
+            }
+          });
+        });
+      } catch (e) {
+        console.warn('SW error:', e);
+      }
     });
   }
 })();

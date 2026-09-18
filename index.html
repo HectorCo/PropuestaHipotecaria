@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Generador de Propuestas Hipotecarias</title>
+  <meta name="theme-color" content="#1e3a8a" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Propuesta de Financiación Hipotecaria</h1>
+    <p>Rellena los datos y genera el documento Word</p>
+  </header>
+
+  <main>
+    <form id="formPropuesta" autocomplete="off">
+      <fieldset>
+        <legend>Datos generales</legend>
+        <label>Nombre del cliente
+          <input type="text" name="nombreCliente" required placeholder="Ej. Irene" />
+        </label>
+        <label>Fecha del documento
+          <input type="date" name="fechaDocumento" />
+        </label>
+        <label>Comercial / Entidad
+          <input type="text" name="comercial" placeholder="Ej. Banco Ejemplo" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>1. Resumen de la operación</legend>
+        <label>Calificación
+          <select name="calificacion">
+            <option value="VIABLE">VIABLE</option>
+            <option value="VIABLE CON CONDICIONES">VIABLE CON CONDICIONES</option>
+            <option value="NO VIABLE">NO VIABLE</option>
+          </select>
+        </label>
+        <label>LTV (%)
+          <input type="text" name="ltv" placeholder="66,00" />
+        </label>
+        <label>Capital hipotecario (€)
+          <input type="text" name="capitalHipotecario" placeholder="186.760,00" />
+        </label>
+        <label>Cuota mensual estimada (€)
+          <input type="text" name="cuotaMensual" placeholder="757,49" />
+        </label>
+        <label>Ratio de endeudamiento (%)
+          <input type="text" name="ratioEndeudamiento" placeholder="32,93" />
+        </label>
+        <label>Precio de venta (€)
+          <input type="text" name="precioVenta" placeholder="283.000,00" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>2. Condiciones de la hipoteca</legend>
+        <label>Tipo de interés
+          <select name="tipoInteres">
+            <option value="Fija">Fija</option>
+            <option value="Variable">Variable</option>
+            <option value="Mixta">Mixta</option>
+          </select>
+        </label>
+        <label>TIN (%)
+          <input type="text" name="tin" placeholder="2,70" />
+        </label>
+        <label>Plazo (años)
+          <input type="text" name="plazoAnos" placeholder="30" />
+        </label>
+        <label>Vinculaciones
+          <input type="text" name="vinculaciones" placeholder="Nómina, seguro de vida y seguro de hogar" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>3. Aportación y ahorros</legend>
+        <label>Ahorros del cliente (€)
+          <input type="text" name="ahorrosCliente" placeholder="140.000,00" />
+        </label>
+        <label>Arras / PYS (€)
+          <input type="text" name="arrasPys" placeholder="28.300,00" />
+        </label>
+        <label>Valor de tasación objetivo (€)
+          <input type="text" name="valorTasacion" placeholder="233.450,00" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Textos personalizables (opcional)</legend>
+        <label>Párrafo de conclusión
+          <textarea name="textoConclusion" rows="3" placeholder="Déjalo vacío para usar el texto por defecto"></textarea>
+        </label>
+      </fieldset>
+
+      <div class="actions">
+        <button type="button" id="btnGenerar" class="btn-primary">Generar documento</button>
+        <button type="button" id="btnLimpiar" class="btn-secondary">Limpiar formulario</button>
+      </div>
+    </form>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

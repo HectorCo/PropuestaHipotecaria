@@ -1,4 +1,4 @@
-const CACHE = 'propuesta-hipotecaria-v1';
+const CACHE = 'propuesta-hipotecaria-v2';
 
 const ASSETS = [
   './',
@@ -8,6 +8,7 @@ const ASSETS = [
   './manifest.json',
   './icon.svg',
   'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js',
+  'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js',
 ];
 
 self.addEventListener('install', (event) => {
@@ -30,7 +31,7 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
       return fetch(event.request).then((res) => {
-        if (res && res.ok && res.type === 'basic') {
+        if (res && res.ok && (res.type === 'basic' || res.type === 'cors')) {
           const clone = res.clone();
           caches.open(CACHE).then((cache) => cache.put(event.request, clone));
         }

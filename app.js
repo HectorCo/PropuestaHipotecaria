@@ -2,6 +2,7 @@
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
           WidthType, AlignmentType, BorderStyle, ShadingType, HeadingLevel } = window.docx;
 
+  // ---------- Referencias DOM ----------
   const form = document.getElementById('formPropuesta');
   const modal = document.getElementById('previewModal');
   const previewContent = document.getElementById('previewContent');
@@ -15,10 +16,23 @@
   const listaBonificaciones = document.getElementById('listaBonificaciones');
   const tbodyGastos = document.getElementById('tbodyGastos');
 
-  const STORAGE_KEY = 'propuesta_borrador_v2';
+  // Borradores
+  const draftStatus = document.getElementById('draftStatus');
+  const btnNuevo = document.getElementById('btnNuevo');
+  const btnGuardar = document.getElementById('btnGuardar');
+  const btnGuardarComo = document.getElementById('btnGuardarComo');
+  const btnMisBorradores = document.getElementById('btnMisBorradores');
+
+  const draftsModal = document.getElementById('draftsModal');
+  const listaDrafts = document.getElementById('listaDrafts');
+  const btnImportar = document.getElementById('btnImportar');
+  const btnExportarTodos = document.getElementById('btnExportarTodos');
+  const inputImportar = document.getElementById('inputImportar');
+
+  const STORAGE_KEY = 'propuesta_scratch_v2';
+  const DRAFTS_KEY = 'propuesta_drafts_v2';
   const FONT_DOCX = 'Aptos, Calibri, Segoe UI, sans-serif';
 
-  // Filas fijas de la tabla de gastos
   const FILAS_GASTOS_DEFAULT = [
     'Registro de la propiedad',
     'Notaría',
@@ -30,6 +44,8 @@
   ];
 
   let ultimosDatos = null;
+  let currentDraftId = null;
+  let currentDraftName = '';
 
   // ---------- Utilidades ----------
   const eur = (v) => {
@@ -54,8 +70,26 @@
     return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
+  const fmtFechaHora = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+           ' ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  };
+
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  const generarId = () => {
+    if (crypto?.randomUUID) return crypto.randomUUID();
+    return 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+  };
+
+  const slugify = (s) => String(s || 'borrador')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60) || 'borrador';
 
   // ---------- Filas dinámicas: bonificaciones ----------
   function crearFilaBonificacion(descripcion = '', puntos = '') {
@@ -68,7 +102,7 @@
     `;
     fila.querySelector('.btn-remove').addEventListener('click', () => {
       fila.remove();
-      guardarBorrador();
+      autosave();
     });
     return fila;
   }
@@ -88,7 +122,7 @@
     `;
     tr.querySelector('.btn-remove').addEventListener('click', () => {
       tr.remove();
-      guardarBorrador();
+      autosave();
     });
     return tr;
   }
@@ -102,75 +136,13 @@
     FILAS_GASTOS_DEFAULT.forEach((c) => agregarGasto(c, '', ''));
   }
 
-  // ---------- Persistencia ----------
-  function guardarBorrador() {
-    const datos = {};
-
-    // Campos simples
-    for (const el of form.elements) {
-      if (el.name && !el.name.endsWith('[]')) datos[el.name] = el.value;
-    }
-
-    // Bonificaciones
-    datos._bonificaciones = [...listaBonificaciones.querySelectorAll('.fila-dinamica')].map((fila) => ({
-      descripcion: fila.querySelector('input[name="bonif_desc[]"]')?.value || '',
-      puntos: fila.querySelector('input[name="bonif_puntos[]"]')?.value || '',
-    }));
-
-    // Gastos
-    datos._gastos = [...tbodyGastos.querySelectorAll('tr')].map((tr) => ({
-      concepto: tr.querySelector('input[name="gasto_concepto[]"]')?.value || '',
-      cliente: tr.querySelector('input[name="gasto_cliente[]"]')?.value || '',
-      entidad: tr.querySelector('input[name="gasto_entidad[]"]')?.value || '',
-    }));
-
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(datos)); } catch (_) {}
-  }
-
-  function cargarBorrador() {
-    try {
-      const datos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-
-      // Campos simples
-      for (const [k, v] of Object.entries(datos)) {
-        if (k.startsWith('_')) continue;
-        const el = form.elements[k];
-        if (el) el.value = v;
-      }
-
-      // Bonificaciones
-      listaBonificaciones.innerHTML = '';
-      if (Array.isArray(datos._bonificaciones) && datos._bonificaciones.length) {
-        datos._bonificaciones.forEach((b) => agregarBonificacion(b));
-      } else {
-        agregarBonificacion({ descripcion: 'Domiciliación de nómina', puntos: '0,50 p.p.' });
-        agregarBonificacion({ descripcion: 'Seguro de hogar', puntos: '0,20 p.p.' });
-      }
-
-      // Gastos
-      tbodyGastos.innerHTML = '';
-      if (Array.isArray(datos._gastos) && datos._gastos.length) {
-        datos._gastos.forEach((g) => agregarGasto(g.concepto, g.cliente, g.entidad));
-      } else {
-        inicializarGastos();
-      }
-    } catch (_) {
-      inicializarGastos();
-    }
-  }
-
-  function limpiarFormulario() {
-    if (!confirm('¿Borrar todos los datos del formulario?')) return;
-    form.reset();
-    localStorage.removeItem(STORAGE_KEY);
-    form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
+  function inicializarBonificaciones() {
     listaBonificaciones.innerHTML = '';
     agregarBonificacion({ descripcion: 'Domiciliación de nómina', puntos: '0,50 p.p.' });
     agregarBonificacion({ descripcion: 'Seguro de hogar', puntos: '0,20 p.p.' });
-    inicializarGastos();
-    actualizarBloqueMixta();
   }
 
+  // ---------- Lectura / escritura del formulario ----------
   function leerDatos() {
     const d = {};
     for (const el of form.elements) {
@@ -188,6 +160,33 @@
     return d;
   }
 
+  function aplicarDatosAlFormulario(datos) {
+    if (!datos) datos = {};
+    form.reset();
+
+    // Campos simples
+    for (const [k, v] of Object.entries(datos)) {
+      if (k.startsWith('_')) continue;
+      const el = form.elements[k];
+      if (el) el.value = v ?? '';
+    }
+
+    // Bonificaciones
+    listaBonificaciones.innerHTML = '';
+    const bonif = Array.isArray(datos._bonificaciones) ? datos._bonificaciones : [];
+    if (bonif.length) bonif.forEach(agregarBonificacion);
+    else inicializarBonificaciones();
+
+    // Gastos
+    tbodyGastos.innerHTML = '';
+    const gastos = Array.isArray(datos._gastos) ? datos._gastos : [];
+    if (gastos.length) gastos.forEach((g) => agregarGasto(g.concepto, g.cliente, g.entidad));
+    else inicializarGastos();
+
+    // Bloque mixta
+    actualizarBloqueMixta();
+  }
+
   // ---------- Bloque "Mixta" ----------
   function actualizarBloqueMixta() {
     const esMixta = selectTipoInteres.value === 'Mixta';
@@ -200,7 +199,290 @@
     }
   }
 
-  // ---------- Textos comunes ----------
+  // =========================================================
+  // ================  GESTIÓN DE BORRADORES  ================
+  // =========================================================
+  function getDrafts() {
+    try { return JSON.parse(localStorage.getItem(DRAFTS_KEY) || '[]'); }
+    catch { return []; }
+  }
+  function saveDrafts(arr) {
+    try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(arr)); } catch (_) {}
+  }
+  function findDraft(id) {
+    return getDrafts().find((d) => d.id === id);
+  }
+  function upsertDraft(draft) {
+    const drafts = getDrafts();
+    const i = drafts.findIndex((d) => d.id === draft.id);
+    if (i >= 0) drafts[i] = draft;
+    else drafts.push(draft);
+    saveDrafts(drafts);
+  }
+  function removeDraft(id) {
+    saveDrafts(getDrafts().filter((d) => d.id !== id));
+  }
+
+  function actualizarBarra() {
+    if (currentDraftId && currentDraftName) {
+      draftStatus.textContent = currentDraftName;
+      draftStatus.classList.remove('unsaved');
+    } else {
+      draftStatus.textContent = 'Sin guardar';
+      draftStatus.classList.add('unsaved');
+    }
+  }
+
+  // ---------- Autosave (scratch + borrador activo) ----------
+  function autosave() {
+    const datos = leerDatos();
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(datos)); } catch (_) {}
+
+    if (currentDraftId) {
+      const draft = findDraft(currentDraftId);
+      if (draft) {
+        draft.datos = datos;
+        draft.updatedAt = new Date().toISOString();
+        upsertDraft(draft);
+      }
+    }
+  }
+
+  function cargarScratch() {
+    try {
+      const datos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      aplicarDatosAlFormulario(datos);
+    } catch (_) {
+      aplicarDatosAlFormulario({});
+    }
+  }
+
+  // ---------- Guardar ----------
+  function guardarBorradorActual() {
+    if (!currentDraftId) {
+      guardarComoNuevoBorrador();
+      return;
+    }
+    const datos = leerDatos();
+    const draft = findDraft(currentDraftId);
+    if (!draft) {
+      guardarComoNuevoBorrador();
+      return;
+    }
+    draft.datos = datos;
+    draft.updatedAt = new Date().toISOString();
+    if (!draft.nombre && datos.nombreCliente) draft.nombre = datos.nombreCliente;
+    upsertDraft(draft);
+    currentDraftName = draft.nombre;
+    actualizarBarra();
+  }
+
+  function guardarComoNuevoBorrador() {
+    const datos = leerDatos();
+    const sugerido = datos.nombreCliente || 'Nuevo borrador';
+    const nombre = prompt('Nombre del borrador:', sugerido);
+    if (nombre === null) return; // cancelado
+    const nombreFinal = (nombre || '').trim() || 'Sin nombre';
+    const id = generarId();
+    const now = new Date().toISOString();
+    const draft = {
+      id,
+      nombre: nombreFinal,
+      createdAt: now,
+      updatedAt: now,
+      datos,
+    };
+    upsertDraft(draft);
+    currentDraftId = id;
+    currentDraftName = nombreFinal;
+    actualizarBarra();
+  }
+
+  // ---------- Nuevo ----------
+  function nuevoBorrador() {
+    if (!confirm('¿Crear un borrador nuevo? Los datos no guardados se perderán.')) return;
+    currentDraftId = null;
+    currentDraftName = '';
+    localStorage.removeItem(STORAGE_KEY);
+    form.reset();
+    form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
+    inicializarBonificaciones();
+    inicializarGastos();
+    actualizarBloqueMixta();
+    actualizarBarra();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ---------- Abrir ----------
+  function abrirBorrador(id) {
+    const draft = findDraft(id);
+    if (!draft) { alert('Borrador no encontrado.'); return; }
+    aplicarDatosAlFormulario(draft.datos || {});
+    currentDraftId = draft.id;
+    currentDraftName = draft.nombre;
+    actualizarBarra();
+    cerrarDraftsModal();
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(draft.datos || {})); } catch (_) {}
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ---------- Eliminar ----------
+  function eliminarBorrador(id) {
+    const draft = findDraft(id);
+    if (!draft) return;
+    if (!confirm(`¿Eliminar el borrador "${draft.nombre}"? Esta acción no se puede deshacer.`)) return;
+    removeDraft(id);
+    if (currentDraftId === id) {
+      currentDraftId = null;
+      currentDraftName = '';
+      actualizarBarra();
+    }
+    renderizarListaDrafts();
+  }
+
+  // ---------- Renombrar ----------
+  function renombrarBorrador(id) {
+    const draft = findDraft(id);
+    if (!draft) return;
+    const nuevo = prompt('Nuevo nombre del borrador:', draft.nombre);
+    if (nuevo === null) return;
+    const nombreFinal = (nuevo || '').trim();
+    if (!nombreFinal) { alert('El nombre no puede estar vacío.'); return; }
+    draft.nombre = nombreFinal;
+    draft.updatedAt = new Date().toISOString();
+    upsertDraft(draft);
+    if (currentDraftId === id) {
+      currentDraftName = nombreFinal;
+      actualizarBarra();
+    }
+    renderizarListaDrafts();
+  }
+
+  // ---------- Duplicar ----------
+  function duplicarBorrador(id) {
+    const draft = findDraft(id);
+    if (!draft) return;
+    const copia = JSON.parse(JSON.stringify(draft));
+    copia.id = generarId();
+    copia.nombre = draft.nombre + ' (copia)';
+    copia.createdAt = new Date().toISOString();
+    copia.updatedAt = new Date().toISOString();
+    upsertDraft(copia);
+    renderizarListaDrafts();
+  }
+
+  // ---------- Exportar ----------
+  function exportarBorrador(id) {
+    const draft = findDraft(id);
+    if (!draft) return;
+    const blob = new Blob([JSON.stringify(draft, null, 2)], { type: 'application/json' });
+    const nombre = `borrador_${slugify(draft.nombre)}_${new Date().toISOString().slice(0, 10)}.json`;
+    descargarBlob(blob, nombre);
+  }
+
+  function exportarTodos() {
+    const drafts = getDrafts();
+    if (!drafts.length) { alert('No hay borradores para exportar.'); return; }
+    const blob = new Blob([JSON.stringify(drafts, null, 2)], { type: 'application/json' });
+    const nombre = `borradores_${new Date().toISOString().slice(0, 10)}.json`;
+    descargarBlob(blob, nombre);
+  }
+
+  // ---------- Importar ----------
+  function importarBorradores(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        const lista = Array.isArray(data) ? data : [data];
+        const drafts = getDrafts();
+        let añadidos = 0;
+        lista.forEach((item) => {
+          if (!item || typeof item !== 'object' || !item.datos) return;
+          const copia = JSON.parse(JSON.stringify(item));
+          copia.id = generarId();
+          copia.nombre = (copia.nombre || 'Importado').trim() || 'Importado';
+          copia.createdAt = copia.createdAt || new Date().toISOString();
+          copia.updatedAt = new Date().toISOString();
+          copia.importedAt = new Date().toISOString();
+          drafts.push(copia);
+          añadidos++;
+        });
+        saveDrafts(drafts);
+        renderizarListaDrafts();
+        if (añadidos === 0) {
+          alert('No se encontraron borradores válidos en el archivo.');
+        } else {
+          alert(`${añadidos} borrador(es) importado(s) correctamente.`);
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Error al importar el archivo: ' + err.message);
+      }
+    };
+    reader.onerror = () => alert('Error al leer el archivo.');
+    reader.readAsText(file);
+  }
+
+  // ---------- Render lista ----------
+  function renderizarListaDrafts() {
+    const drafts = getDrafts().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    if (!drafts.length) {
+      listaDrafts.innerHTML = `
+        <div class="draft-empty">
+          No tienes borradores guardados todavía.<br>
+          Pulsa "Guardar como…" para crear uno, o "Importar JSON" para cargar uno existente.
+        </div>`;
+      return;
+    }
+    listaDrafts.innerHTML = drafts.map((d) => `
+      <div class="draft-item${d.id === currentDraftId ? ' active' : ''}" data-id="${esc(d.id)}">
+        <div class="draft-item-info">
+          <div class="draft-item-name">${esc(d.nombre)}</div>
+          <div class="draft-item-meta">
+            ${d.datos?.nombreCliente ? esc(d.datos.nombreCliente) + ' · ' : ''}
+            Actualizado: ${esc(fmtFechaHora(d.updatedAt))}
+          </div>
+        </div>
+        <div class="draft-item-actions">
+          <button type="button" class="btn-ghost" data-action="abrir">Abrir</button>
+          <button type="button" class="btn-ghost" data-action="renombrar">Renombrar</button>
+          <button type="button" class="btn-ghost" data-action="duplicar">Duplicar</button>
+          <button type="button" class="btn-ghost" data-action="exportar">Exportar</button>
+          <button type="button" class="btn-danger" data-action="eliminar">Eliminar</button>
+        </div>
+      </div>
+    `).join('');
+
+    listaDrafts.querySelectorAll('.draft-item').forEach((el) => {
+      const id = el.dataset.id;
+      el.querySelectorAll('button[data-action]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const action = btn.dataset.action;
+          if (action === 'abrir') abrirBorrador(id);
+          else if (action === 'renombrar') renombrarBorrador(id);
+          else if (action === 'duplicar') duplicarBorrador(id);
+          else if (action === 'exportar') exportarBorrador(id);
+          else if (action === 'eliminar') eliminarBorrador(id);
+        });
+      });
+    });
+  }
+
+  // ---------- Modal borradores ----------
+  function abrirDraftsModal() {
+    renderizarListaDrafts();
+    draftsModal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function cerrarDraftsModal() {
+    draftsModal.hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  // =========================================================
+  // ================  TEXTO DEL DOCUMENTO  ==================
+  // =========================================================
   function textos(d) {
     const conclusionDefault =
       `Esta propuesta equilibra una cuota mensual cómoda con una financiación ajustada a tus necesidades. ` +
@@ -224,11 +506,9 @@
         const fij = parseInt(d.periodoFijoAnos, 10);
         return (!isNaN(tot) && !isNaN(fij) && tot > fij) ? String(tot - fij) : '—';
       })();
-
       condiciones =
         `Modalidad Mixta: un primer periodo a tipo fijo que te protege frente a las subidas de tipos, ` +
         `seguido de un periodo a tipo variable referenciado al ${d.indiceVariable || 'Euríbor 12M'} más un diferencial.`;
-
       detalleCondiciones = [
         `Periodo fijo (${aniosFijos} años): TIN fijo al ${pct(d.tinFijo)}.`,
         `Periodo variable (${aniosVariables} años): ${d.indiceVariable || 'Euríbor 12M'} + ${pct(d.diferencialVariable)}.`,
@@ -236,9 +516,7 @@
       ];
     } else {
       condiciones = `Modalidad ${d.tipoInteres || 'Fija'} durante toda la vida del préstamo.`;
-      detalleCondiciones = [
-        `Plazo: ${d.plazoAnos || '—'} años.`,
-      ];
+      detalleCondiciones = [`Plazo: ${d.plazoAnos || '—'} años.`];
     }
 
     return {
@@ -256,7 +534,9 @@
     };
   }
 
-  // ---------- HTML de vista previa ----------
+  // =========================================================
+  // ================  VISTA PREVIA HTML  ====================
+  // =========================================================
   function construirHTML(d) {
     const t = textos(d);
     const row = (k, v) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`;
@@ -366,7 +646,7 @@
     `;
   }
 
-  // ---------- Modal ----------
+  // ---------- Modales vista previa ----------
   function abrirModal() {
     const d = leerDatos();
     if (!d.nombreCliente) {
@@ -380,7 +660,6 @@
     document.body.style.overflow = 'hidden';
     modal.querySelector('.modal-body').scrollTop = 0;
   }
-
   function cerrarModal() {
     modal.hidden = true;
     document.body.style.overflow = '';
@@ -483,7 +762,6 @@
   function construirDocumentoDOCX(d) {
     const t = textos(d);
 
-    // Cabecera: datos de oficina/gestor
     const filasCabecera = [];
     if (d.oficina) filasCabecera.push(['Oficina', d.oficina]);
     if (d.gestor) filasCabecera.push(['Gestor', d.gestor]);
@@ -491,7 +769,6 @@
     if (d.emailGestor) filasCabecera.push(['Email gestor', d.emailGestor]);
     if (d.telefonoGestor) filasCabecera.push(['Teléfono gestor', d.telefonoGestor]);
 
-    // Sección 1
     const tablaOperacion = tablaDatosDocx([
       ['Precio de compra', eur(d.precioCompra)],
       ['Importe del préstamo hipotecario', eur(d.capitalHipotecario)],
@@ -503,7 +780,6 @@
       ['Ubicación del inmueble', d.ubicacionInmueble || '—'],
     ]);
 
-    // Sección 2
     const filasCond = [
       ['Cuota mensual — con bonificación', eur(d.cuotaBonificada)],
       ['Cuota mensual — sin bonificación', eur(d.cuotaSinBonificar)],
@@ -535,14 +811,10 @@
       }),
     ];
 
-    if (filasCabecera.length) {
-      children.push(tablaDatosDocx(filasCabecera));
-    }
+    if (filasCabecera.length) children.push(tablaDatosDocx(filasCabecera));
 
-    // 1
     children.push(tituloDocx('1. Datos de la operación'), tablaOperacion);
 
-    // 2
     children.push(
       tituloDocx('2. Condiciones financieras'),
       tablaCondiciones,
@@ -550,7 +822,6 @@
       ...t.detalleCondiciones.map(vinetaDocx),
     );
 
-    // 3. Bonificaciones
     if (d._bonificaciones.length) {
       const tablaBonif = tablaDocx(
         d._bonificaciones.map((b) => [b.descripcion, b.puntos || '—']),
@@ -559,7 +830,6 @@
       children.push(tituloDocx('3. Bonificaciones aplicables'), tablaBonif);
     }
 
-    // 4. Comisiones
     const tablaComisiones = tablaDatosDocx([
       ['Comisión de apertura', d.comisionApertura || '0 €'],
       ['Reembolso anticipado parcial (10 primeros años)', d.reembolsoParcial10 || '—'],
@@ -569,7 +839,6 @@
     ]);
     children.push(tituloDocx('4. Comisiones'), tablaComisiones);
 
-    // 5. Desglose de gastos
     const filasGastosDocx = d._gastos.map((g) => [
       g.concepto,
       g.cliente ? eur(g.cliente) : '—',
@@ -586,14 +855,12 @@
     });
     children.push(tituloDocx('5. Desglose de gastos'), tablaGastos);
 
-    // 6. Aportación y ahorros
     children.push(
       tituloDocx('6. Aportación y ahorros'),
       vinetaDocx(`Ahorros del cliente: ${eur(d.ahorrosCliente)}.`),
       vinetaDocx(`Arras / PYS: ${eur(d.arrasPys)}.`),
     );
 
-    // 7. Ahorro total
     children.push(
       tituloDocx('7. Ahorro total a aportar por el cliente'),
       parrafoDocx('El cliente deberá aportar de fondos propios un total de:'),
@@ -601,13 +868,8 @@
       parrafoDocx(t.textoAhorro),
     );
 
-    // Conclusión
-    children.push(
-      tituloDocx('Conclusión'),
-      parrafoDocx(t.conclusion),
-    );
+    children.push(tituloDocx('Conclusión'), parrafoDocx(t.conclusion));
 
-    // Notas legales
     children.push(
       new Paragraph({
         spacing: { before: 400, after: 120 },
@@ -639,7 +901,7 @@
     });
   }
 
-  // ---------- Descarga ----------
+  // ---------- Descargas ----------
   function descargarBlob(blob, nombre) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -675,34 +937,64 @@
   }
 
   // ---------- Eventos ----------
-  form.addEventListener('input', guardarBorrador);
-  form.addEventListener('change', guardarBorrador);
-  selectTipoInteres.addEventListener('change', actualizarBloqueMixta);
+  form.addEventListener('input', autosave);
+  form.addEventListener('change', autosave);
+  selectTipoInteres.addEventListener('change', () => { actualizarBloqueMixta(); autosave(); });
+
   btnPreview.addEventListener('click', abrirModal);
-  btnLimpiar.addEventListener('click', limpiarFormulario);
   btnGenerar.addEventListener('click', descargarDOCX);
   btnClose.addEventListener('click', cerrarModal);
-  modal.addEventListener('click', (e) => {
-    if (e.target.matches('[data-close]')) cerrarModal();
+  modal.addEventListener('click', (e) => { if (e.target.matches('[data-close]')) cerrarModal(); });
+
+  // Borradores
+  btnNuevo.addEventListener('click', nuevoBorrador);
+  btnGuardar.addEventListener('click', guardarBorradorActual);
+  btnGuardarComo.addEventListener('click', guardarComoNuevoBorrador);
+  btnMisBorradores.addEventListener('click', abrirDraftsModal);
+
+  draftsModal.addEventListener('click', (e) => {
+    if (e.target.matches('[data-close-drafts]')) cerrarDraftsModal();
   });
+  btnExportarTodos.addEventListener('click', exportarTodos);
+  btnImportar.addEventListener('click', () => inputImportar.click());
+  inputImportar.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) importarBorradores(file);
+    inputImportar.value = '';
+  });
+
+  // "Limpiar formulario" → ahora limpia solo los campos, no borra el borrador
+  btnLimpiar.addEventListener('click', () => {
+    if (!confirm('¿Vaciar todos los campos del formulario? El borrador activo no se eliminará.')) return;
+    form.reset();
+    form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
+    inicializarBonificaciones();
+    inicializarGastos();
+    actualizarBloqueMixta();
+    autosave();
+  });
+
+  // Tecla Escape cierra modales
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modal.hidden) cerrarModal();
+    if (e.key !== 'Escape') return;
+    if (!modal.hidden) cerrarModal();
+    if (!draftsModal.hidden) cerrarDraftsModal();
   });
 
   // Botón "+ Añadir bonificación"
   document.querySelector('[data-add="bonificaciones"]').addEventListener('click', () => {
     agregarBonificacion();
-    guardarBorrador();
+    autosave();
   });
 
   // ---------- Init ----------
   document.addEventListener('DOMContentLoaded', () => {
-    cargarBorrador();
+    cargarScratch();
     if (!form.elements.fechaDocumento.value) {
       form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
     }
     actualizarBloqueMixta();
-    if (!tbodyGastos.children.length) inicializarGastos();
+    actualizarBarra();
   });
 
   // Service Worker con auto-actualización

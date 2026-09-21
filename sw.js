@@ -1,4 +1,4 @@
-const CACHE = 'propuesta-hipotecaria-v7';
+const CACHE = 'propuesta-hipotecaria-v8';
 
 const ASSETS = [
   './',
@@ -32,7 +32,6 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Network-first para HTML/JS/CSS: siempre busca versión nueva
   if (
     event.request.mode === 'navigate' ||
     url.pathname.endsWith('.html') ||
@@ -51,7 +50,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first para el resto
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;

@@ -16,6 +16,20 @@
     <p>Rellena los datos y genera el documento Word</p>
   </header>
 
+  <!-- Barra de borradores -->
+  <div class="draft-bar">
+    <div class="draft-info">
+      <span class="draft-label">Borrador actual:</span>
+      <span id="draftStatus" class="draft-status">Sin guardar</span>
+    </div>
+    <div class="draft-actions">
+      <button type="button" id="btnNuevo" class="btn-ghost">Nuevo</button>
+      <button type="button" id="btnGuardar" class="btn-ghost">Guardar</button>
+      <button type="button" id="btnGuardarComo" class="btn-ghost">Guardar como…</button>
+      <button type="button" id="btnMisBorradores" class="btn-ghost">Mis borradores</button>
+    </div>
+  </div>
+
   <main>
     <form id="formPropuesta" autocomplete="off">
       <!-- ============ DATOS GENERALES ============ -->
@@ -172,11 +186,10 @@
                 <th>Concepto</th>
                 <th>Cliente (€)</th>
                 <th>Entidad (€)</th>
+                <th></th>
               </tr>
             </thead>
-            <tbody id="tbodyGastos">
-              <!-- Se rellena dinámicamente desde JS -->
-            </tbody>
+            <tbody id="tbodyGastos"></tbody>
           </table>
         </div>
         <div class="totales-gastos">
@@ -229,6 +242,7 @@
     </form>
   </main>
 
+  <!-- ============ MODAL VISTA PREVIA ============ -->
   <div id="previewModal" class="modal" hidden>
     <div class="modal-backdrop" data-close></div>
     <div class="modal-panel">
@@ -238,6 +252,22 @@
       </div>
       <div class="modal-body">
         <div id="previewContent" class="doc-preview"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL MIS BORRADORES ============ -->
+  <div id="draftsModal" class="modal" hidden>
+    <div class="modal-backdrop" data-close-drafts></div>
+    <div class="modal-panel">
+      <div class="modal-toolbar">
+        <button type="button" id="btnImportar" class="btn-secondary">Importar JSON</button>
+        <button type="button" id="btnExportarTodos" class="btn-secondary">Exportar todos</button>
+        <button type="button" class="btn-primary" data-close-drafts>Cerrar</button>
+      </div>
+      <input type="file" id="inputImportar" accept="application/json,.json" hidden />
+      <div class="modal-body">
+        <div id="listaDrafts" class="lista-drafts"></div>
       </div>
     </div>
   </div>

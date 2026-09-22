@@ -13,7 +13,6 @@
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Limpieza: desregistra SW antiguos y borra TODAS las cachés -->
   <script>
     (function cleanupOldSW() {
       if (!('serviceWorker' in navigator)) return;
@@ -45,7 +44,6 @@
     <p>Rellena los datos y genera el documento Word</p>
   </header>
 
-  <!-- Barra de borradores -->
   <div class="draft-bar">
     <div class="draft-info">
       <span class="draft-label">Borrador actual:</span>
@@ -102,6 +100,21 @@
         </label>
       </fieldset>
 
+      <!-- ============ LOGOS ============ -->
+      <fieldset>
+        <legend>Logos de la propuesta</legend>
+        <label>Logo izquierdo (imagen)
+          <input type="file" name="logoIzquierdoFile" accept="image/*" />
+        </label>
+        <label>Logo derecho (imagen)
+          <input type="file" name="logoDerechoFile" accept="image/*" />
+        </label>
+        <p class="hint full">
+          Los logos se guardan dentro del borrador. Si no subes ninguno, se usan los logos por defecto
+          (<code>logo-b.png</code> y <code>logo-blanco.png</code> en la raíz del proyecto).
+        </p>
+      </fieldset>
+
       <!-- ============ 1. DATOS DE LA OPERACIÓN ============ -->
       <fieldset>
         <legend>1. Datos de la operación</legend>
@@ -134,10 +147,8 @@
           <input type="text" name="ubicacionInmueble" placeholder="Ej. BARCELONA" />
         </label>
 
-        <!-- Bloque condicional "Mixta" -->
         <div id="bloqueMixta" class="bloque-mixta" hidden>
           <p class="bloque-titulo">Detalles de la parte mixta</p>
-
           <label>Años a tipo fijo
             <input type="text" name="periodoFijoAnos" placeholder="10" />
           </label>
@@ -283,7 +294,6 @@
     </form>
   </main>
 
-  <!-- ============ MODAL VISTA PREVIA ============ -->
   <div id="previewModal" class="modal" hidden>
     <div class="modal-backdrop" data-close></div>
     <div class="modal-panel">
@@ -297,7 +307,6 @@
     </div>
   </div>
 
-  <!-- ============ MODAL MIS BORRADORES ============ -->
   <div id="draftsModal" class="modal" hidden>
     <div class="modal-backdrop" data-close-drafts></div>
     <div class="modal-panel">

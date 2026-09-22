@@ -724,4 +724,466 @@
       return;
     }
     ultimosDatos = d;
-    previewContent.innerHTML = construirHTML
+    previewContent.innerHTML = construirHTML(d);
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    modal.querySelector('.modal-body').scrollTop = 0;
+  }
+  function cerrarModal() {
+    modal.hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  // =========================================================
+  // ================  DOCX  =================================
+  // =========================================================
+  const BORDER = { style: BorderStyle.SINGLE, size: 4, color: 'CBD5E1' };
+
+  function celdaDocx(texto, { bold = false, fill = null, width = null, align = null } = {}) {
+    const parrafo = new Paragraph({
+      alignment: align || AlignmentType.LEFT,
+      children: [new TextRun({ text: String(texto ?? ''), bold, size: 22, font: FONT_DOCX })],
+    });
+    const opts = {
+      children: [parrafo],
+      margins: { top: 80, bottom: 80, left: 120, right: 120 },
+    };
+    if (fill) opts.shading = { type: ShadingType.CLEAR, fill, color: 'auto' };
+    if (width) opts.width = { size: width, type: WidthType.PERCENTAGE };
+    return new TableCell(opts);
+  }
+
+  function tablaDocx(rows, { header = null, widths = null } = {}) {
+    const trs = [];
+    if (header) {
+      trs.push(new TableRow({
+        tableHeader: true,
+        children: header.map((h, i) => celdaDocx(h, {
+          bold: true, fill: '1E3A8A', width: widths?.[i] ?? null,
+        })),
+      }));
+    }
+    rows.forEach((r) => {
+      trs.push(new TableRow({
+        children: r.map((c, i) => {
+          if (typeof c === 'object' && c !== null) {
+            return celdaDocx(c.text, {
+              bold: c.bold,
+              fill: c.fill,
+              width: widths?.[i] ?? null,
+              align: c.align,
+            });
+          }
+          return celdaDocx(c, { width: widths?.[i] ?? null });
+        }),
+      }));
+    });
+    return new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        top: BORDER, bottom: BORDER, left: BORDER, right: BORDER,
+        insideHorizontal: BORDER, insideVertical: BORDER,
+      },
+      rows: trs,
+    });
+  }
+
+  function tablaDatosDocx(rows) {
+    return tablaDocx(rows.map(([k, v]) => [
+      { text: k, bold: true, fill: 'F1F5F9' },
+      v,
+    ]), { widths: [40, 60] });
+  }
+
+  // Crea una celda de tabla sin bordes (para la cabecera de logos)
+  function celdaLogoDocx(runOrText, { align = AlignmentType.LEFT } = {}) {
+    return new TableCell({
+      borders: {
+        top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+      },
+      width: { size: 50, type: WidthType.PERCENTAGE },
+      children: [new Paragraph({
+        alignment: align,
+        children: [runOrText],
+      })],
+    });
+  }
+
+  function tituloDocx(texto) {
+    return new Paragraph({
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 320, after: 160 },
+      children: [new TextRun({ text: texto, bold: true, color: '1E3A8A', size: 26, font: FONT_DOCX })],
+    });
+  }
+
+  function parrafoDocx(texto) {
+    return new Paragraph({
+      spacing: { after: 120 },
+      children: [new TextRun({ text: String(texto ?? ''), size: 22, font: FONT_DOCX })],
+    });
+  }
+
+  function parrafoDestacadoDocx(texto, { size = 24, bold = false, color = null } = {}) {
+    return new Paragraph({
+      spacing: { after: 120 },
+      children: [new TextRun({
+        text: String(texto ?? ''), size, bold, font: FONT_DOCX,
+        color: color || undefined,
+      })],
+    });
+  }
+
+  function vinetaDocx(texto) {
+    return new Paragraph({
+      bullet: { level: 0 },
+      spacing: { after: 60 },
+      children: [new TextRun({ text: String(texto ?? ''), size: 22, font: FONT_DOCX })],
+    });
+  }
+
+  // Construye el ImageRun a partir de un dataURL
+  async function construirImageRun(dataUrl) {
+    const resized = await resizeDataUrl(dataUrl, LOGO_MAX_WIDTH_PX, LOGO_MAX_HEIGHT_PX);
+    const bytes = dataUrlToUint8(resized.dataUrl);
+    const mime = dataUrlMime(resized.dataUrl);
+    return new ImageRun({
+      data: bytes,
+      transformation: { width: resized.width, height: resized.height },
+      type: docxImageType(mime),
+    });
+  }
+
+  // Devuelve el dataURL de un logo (subido, o el default por URL)
+  async function obtenerLogoDataUrl(subido, urlDefault) {
+    if (subido) return subido;
+    try { return await urlToDataUrl(urlDefault); }
+    catch (_) { return null; }
+  }
+
+  async function construirDocumentoDOCX(d) {
+    const t = textos(d);
+
+    // Logos
+    const izqDataUrl = await obtenerLogoDataUrl(d._logoIzq, LOGO_IZQ_DEFAULT);
+    const derDataUrl = await obtenerLogoDataUrl(d._logoDer, LOGO_DER_DEFAULT);
+    const izqRun = izqDataUrl ? await construirImageRun(izqDataUrl) : new TextRun({ text: '' });
+    const derRun = derDataUrl ? await construirImageRun(derDataUrl) : new TextRun({ text: '' });
+
+    const tablaLogos = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        insideVertical: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+      },
+      rows: [
+        new TableRow({
+          children: [
+            celdaLogoDocx(izqRun, { align: AlignmentType.LEFT }),
+            celdaLogoDocx(derRun, { align: AlignmentType.RIGHT }),
+          ],
+        }),
+      ],
+    });
+
+    const filasCabecera = [];
+    if (d.oficina) filasCabecera.push(['Oficina', d.oficina]);
+    if (d.gestor) filasCabecera.push(['Gestor', d.gestor]);
+    if (d.expediente) filasCabecera.push(['Expediente', d.expediente]);
+    if (d.emailGestor) filasCabecera.push(['Email gestor', d.emailGestor]);
+    if (d.telefonoGestor) filasCabecera.push(['Teléfono gestor', d.telefonoGestor]);
+
+    const tablaOperacion = tablaDatosDocx([
+      ['Precio de compra', eur(d.precioCompra)],
+      ['Importe del préstamo hipotecario', eur(d.capitalHipotecario)],
+      ['Plazo', (d.plazoAnos || '—') + ' años'],
+      ['Tipo elegido', d.tipoInteres || '—'],
+      ['Producto comercial', d.productoComercial || '—'],
+      ['Finalidad', d.finalidad || '—'],
+      ['Tipo de inmueble', d.tipoInmueble || '—'],
+      ['Ubicación del inmueble', d.ubicacionInmueble || '—'],
+    ]);
+
+    const filasCond = [
+      ['Cuota mensual — con bonificación', eur(d.cuotaBonificada)],
+      ['Cuota mensual — sin bonificación', eur(d.cuotaSinBonificar)],
+      ['TIN — con bonificación', pct(d.tinBonificado)],
+      ['TIN — sin bonificación', pct(d.tinSinBonificar)],
+      ['TAE — con bonificación', pct(d.taeBonificada)],
+      ['TAE — sin bonificación', pct(d.taeSinBonificar)],
+      ['Importe total adeudado — con bonificación', eur(d.importeTotalBonificado)],
+      ['Importe total adeudado — sin bonificación', eur(d.importeTotalSinBonificar)],
+    ];
+    if (d.numeroCuotas) filasCond.push(['Número de cuotas', d.numeroCuotas]);
+    const tablaCondiciones = tablaDatosDocx(filasCond);
+
+    const children = [
+      tablaLogos,
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 240, after: 80 },
+        children: [new TextRun({
+          text: 'Propuesta de Financiación Hipotecaria',
+          bold: true, size: 34, color: '1E3A8A', font: FONT_DOCX,
+        })],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 320 },
+        children: [new TextRun({
+          text: t.subtitle, italics: true, color: '64748B', size: 20, font: FONT_DOCX,
+        })],
+      }),
+    ];
+
+    if (filasCabecera.length) children.push(tablaDatosDocx(filasCabecera));
+
+    children.push(tituloDocx('1. Datos de la operación'), tablaOperacion);
+
+    children.push(
+      tituloDocx('2. Condiciones financieras'),
+      tablaCondiciones,
+      parrafoDocx(t.condiciones),
+      ...t.detalleCondiciones.map(vinetaDocx),
+    );
+
+    if (d._bonificaciones.length) {
+      const tablaBonif = tablaDocx(
+        d._bonificaciones.map((b) => [b.descripcion, b.puntos || '—']),
+        { header: ['Producto / Servicio', 'Bonificación'], widths: [70, 30] }
+      );
+      children.push(tituloDocx('3. Bonificaciones aplicables'), tablaBonif);
+    }
+
+    const tablaComisiones = tablaDatosDocx([
+      ['Comisión de apertura', d.comisionApertura || '0 €'],
+      ['Reembolso anticipado parcial (10 primeros años)', d.reembolsoParcial10 || '—'],
+      ['Reembolso anticipado parcial (resto)', d.reembolsoParcialResto || '—'],
+      ['Reembolso anticipado total (10 primeros años)', d.reembolsoTotal10 || '—'],
+      ['Reembolso anticipado total (resto)', d.reembolsoTotalResto || '—'],
+    ]);
+    children.push(tituloDocx('4. Comisiones'), tablaComisiones);
+
+    const filasGastosDocx = d._gastos.map((g) => [
+      g.concepto,
+      g.cliente ? eur(g.cliente) : '—',
+      g.entidad ? eur(g.entidad) : '—',
+    ]);
+    filasGastosDocx.push([
+      { text: 'Total', bold: true },
+      { text: eur(d.totalCliente), bold: true, align: AlignmentType.RIGHT },
+      { text: eur(d.totalEntidad), bold: true, align: AlignmentType.RIGHT },
+    ]);
+    const tablaGastos = tablaDocx(filasGastosDocx, {
+      header: ['Concepto', 'Cliente', 'Entidad'],
+      widths: [50, 25, 25],
+    });
+    children.push(tituloDocx('5. Desglose de gastos'), tablaGastos);
+
+    children.push(
+      tituloDocx('6. Aportación y ahorros'),
+      vinetaDocx(`Ahorros del cliente: ${eur(d.ahorrosCliente)}.`),
+      vinetaDocx(`Arras / PYS: ${eur(d.arrasPys)}.`),
+    );
+
+    children.push(
+      tituloDocx('7. Ahorro total a aportar por el cliente'),
+      parrafoDocx('El cliente deberá aportar de fondos propios un total de:'),
+      parrafoDestacadoDocx(eur(d.ahorroTotalAportar), { size: 32, bold: true, color: '1E3A8A' }),
+      parrafoDocx(t.textoAhorro),
+    );
+
+    children.push(tituloDocx('Conclusión'), parrafoDocx(t.conclusion));
+
+    children.push(
+      new Paragraph({
+        spacing: { before: 400, after: 120 },
+        border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'CBD5E1', space: 8 } },
+        children: [new TextRun({
+          text: t.notasLegales,
+          size: 18, italics: true, color: '64748B', font: FONT_DOCX,
+        })],
+      }),
+    );
+
+    return new Document({
+      creator: 'Generador de Propuestas',
+      title: `Propuesta de financiación hipotecaria - ${d.nombreCliente || ''}`,
+      styles: {
+        default: {
+          document: {
+            run: { font: FONT_DOCX, size: 22 },
+            paragraph: { spacing: { after: 120 } },
+          },
+        },
+      },
+      sections: [{
+        properties: {
+          page: { margin: { top: 1000, bottom: 1000, left: 1100, right: 1100 } },
+        },
+        children,
+      }],
+    });
+  }
+
+  // ---------- Descargas ----------
+  function descargarBlob(blob, nombre) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nombre;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function nombreArchivo(ext) {
+    const base = (ultimosDatos?.nombreCliente || 'cliente').replace(/\s+/g, '_');
+    return `Propuesta_${base}_${new Date().getFullYear()}.${ext}`;
+  }
+
+  async function descargarDOCX() {
+    if (!ultimosDatos) return;
+    const orig = btnGenerar.textContent;
+    btnGenerar.disabled = true;
+    btnGenerar.textContent = 'Generando…';
+    try {
+      const doc = await construirDocumentoDOCX(ultimosDatos);
+      const blob = await Packer.toBlob(doc);
+      descargarBlob(blob, nombreArchivo('docx'));
+    } catch (err) {
+      console.error(err);
+      alert('Error al generar el DOCX: ' + err.message);
+    } finally {
+      btnGenerar.disabled = false;
+      btnGenerar.textContent = orig;
+    }
+  }
+
+  // ---------- Eventos ----------
+  form.addEventListener('input', autosave);
+  form.addEventListener('change', autosave);
+  selectTipoInteres.addEventListener('change', () => { actualizarBloqueMixta(); autosave(); });
+
+  // Subida de logos
+  form.elements.logoIzquierdoFile?.addEventListener('change', async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      logoIzquierdoDataUrl = await fileToDataUrl(f);
+      autosave();
+    } catch (err) { alert('No se pudo cargar el logo: ' + err.message); }
+    e.target.value = '';
+  });
+
+  form.elements.logoDerechoFile?.addEventListener('change', async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      logoDerechoDataUrl = await fileToDataUrl(f);
+      autosave();
+    } catch (err) { alert('No se pudo cargar el logo: ' + err.message); }
+    e.target.value = '';
+  });
+
+  btnPreview.addEventListener('click', abrirModal);
+  btnGenerar.addEventListener('click', descargarDOCX);
+  btnClose.addEventListener('click', cerrarModal);
+  modal.addEventListener('click', (e) => { if (e.target.matches('[data-close]')) cerrarModal(); });
+
+  btnNuevo.addEventListener('click', nuevoBorrador);
+  btnGuardar.addEventListener('click', guardarBorradorActual);
+  btnGuardarComo.addEventListener('click', guardarComoNuevoBorrador);
+  btnMisBorradores.addEventListener('click', abrirDraftsModal);
+
+  draftsModal.addEventListener('click', (e) => {
+    if (e.target.matches('[data-close-drafts]')) cerrarDraftsModal();
+  });
+  btnExportarTodos.addEventListener('click', exportarTodos);
+  btnImportar.addEventListener('click', () => inputImportar.click());
+  inputImportar.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) importarBorradores(file);
+    inputImportar.value = '';
+  });
+
+  btnLimpiar.addEventListener('click', () => {
+    if (!confirm('¿Vaciar todos los campos del formulario? El borrador activo no se eliminará.')) return;
+    form.reset();
+    form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
+    logoIzquierdoDataUrl = null;
+    logoDerechoDataUrl = null;
+    aplicarCamposFijos();
+    inicializarBonificaciones();
+    inicializarGastos();
+    actualizarBloqueMixta();
+    autosave();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!modal.hidden) cerrarModal();
+    if (!draftsModal.hidden) cerrarDraftsModal();
+  });
+
+  document.querySelector('[data-add="bonificaciones"]').addEventListener('click', () => {
+    agregarBonificacion();
+    autosave();
+  });
+
+  // ---------- Init ----------
+  document.addEventListener('DOMContentLoaded', () => {
+    cargarScratch();
+    if (!form.elements.fechaDocumento.value) {
+      form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
+    }
+    aplicarCamposFijos();
+    actualizarBloqueMixta();
+    actualizarBarra();
+  });
+
+  // =========================================================
+  // ==========  SERVICE WORKER (sw-v3.js)  ==================
+  // =========================================================
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', async () => {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) {
+          const url = (r.active || r.installing || r.waiting || {}).scriptURL || '';
+          if (url.indexOf('sw-v3.js') === -1) {
+            try { await r.unregister(); } catch (_) {}
+          }
+        }
+        const reg = await navigator.serviceWorker.register('sw-v3.js');
+        reg.update();
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        reg.addEventListener('updatefound', () => {
+          const nuevo = reg.installing;
+          if (!nuevo) return;
+          nuevo.addEventListener('statechange', () => {
+            if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
+              window.location.reload();
+            }
+          });
+        });
+        setInterval(() => {
+          navigator.serviceWorker.getRegistration().then((r) => r?.update());
+        }, 60 * 1000);
+        window.addEventListener('focus', () => {
+          navigator.serviceWorker.getRegistration().then((r) => r?.update());
+        });
+      } catch (e) {
+        console.warn('SW error:', e);
+      }
+    });
+  }
+})();

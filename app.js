@@ -1,6 +1,7 @@
 (() => {
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-          WidthType, AlignmentType, BorderStyle, ShadingType, HeadingLevel } = window.docx;
+          WidthType, AlignmentType, BorderStyle, ShadingType, HeadingLevel,
+          ImageRun } = window.docx;
 
   // ---------- Referencias DOM ----------
   const form = document.getElementById('formPropuesta');
@@ -16,7 +17,6 @@
   const listaBonificaciones = document.getElementById('listaBonificaciones');
   const tbodyGastos = document.getElementById('tbodyGastos');
 
-  // Borradores
   const draftStatus = document.getElementById('draftStatus');
   const btnNuevo = document.getElementById('btnNuevo');
   const btnGuardar = document.getElementById('btnGuardar');
@@ -33,7 +33,6 @@
   const DRAFTS_KEY = 'propuesta_drafts_v2';
   const FONT_DOCX = 'Aptos, Calibri, Segoe UI, sans-serif';
 
-  // Campos que SIEMPRE tienen un valor fijo (no se guardan ni se leen de borradores)
   const FIXED_FIELDS = {
     gestor: 'Héctor Company',
     emailGestor: 'bgg@bgestionglobal.net',
@@ -50,9 +49,19 @@
     'Seguro de daños',
   ];
 
+  // URLs por defecto de los logos (archivos en la raíz del proyecto)
+  const LOGO_IZQ_DEFAULT = 'logo-b.png';
+  const LOGO_DER_DEFAULT = 'logo-blanco.png';
+
+  // Medidas en píxeles aproximadas para el DOCX (EMU a 96 DPI ≈ px * 9525)
+  const LOGO_MAX_WIDTH_PX = 150;
+  const LOGO_MAX_HEIGHT_PX = 70;
+
   let ultimosDatos = null;
   let currentDraftId = null;
   let currentDraftName = '';
+  let logoIzquierdoDataUrl = null;   // null = usar el default por URL
+  let logoDerechoDataUrl = null;
 
   // ---------- Utilidades ----------
   const eur = (v) => {
@@ -98,6 +107,65 @@
     .replace(/^_+|_+$/g, '')
     .slice(0, 60) || 'borrador';
 
+  // Convierte un dataURL a Uint8Array (para docx)
+  function dataUrlToUint8(dataUrl) {
+    const base64 = dataUrl.split(',')[1];
+    const bin = atob(base64);
+    const len = bin.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  // Detecta el tipo de imagen a partir de un dataURL
+  function dataUrlMime(dataUrl) {
+    const m = /^data:([^;]+);/.exec(dataUrl || '');
+    return m ? m[1] : 'image/png';
+  }
+
+  function docxImageType(mime) {
+    if (mime.includes('png')) return 'png';
+    if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
+    if (mime.includes('gif')) return 'gif';
+    if (mime.includes('bmp')) return 'bmp';
+    return 'png';
+  }
+
+  // Convierte un archivo a dataURL
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Carga una imagen desde una URL y devuelve su dataURL
+  async function urlToDataUrl(url) {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('No se pudo cargar ' + url);
+    const blob = await res.blob();
+    return await fileToDataUrl(blob);
+  }
+
+  // Redimensiona una imagen proporcionalmente para que quepa en las medidas dadas
+  async function resizeDataUrl(dataUrl, maxW, maxH) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.naturalWidth;
+        let h = img.naturalHeight;
+        const ratio = Math.min(maxW / w, maxH / h, 1);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+        resolve({ width: w, height: h, dataUrl });
+      };
+      img.onerror = () => resolve({ width: maxW, height: maxH, dataUrl });
+      img.src = dataUrl;
+    });
+  }
+
   // Aplica los campos fijos al formulario
   function aplicarCamposFijos() {
     for (const [k, v] of Object.entries(FIXED_FIELDS)) {
@@ -106,7 +174,7 @@
     }
   }
 
-  // ---------- Filas dinámicas: bonificaciones ----------
+  // ---------- Filas dinámicas ----------
   function crearFilaBonificacion(descripcion = '', puntos = '') {
     const fila = document.createElement('div');
     fila.className = 'fila-dinamica';
@@ -126,7 +194,6 @@
     listaBonificaciones.appendChild(crearFilaBonificacion(datos?.descripcion, datos?.puntos));
   }
 
-  // ---------- Tabla dinámica: gastos ----------
   function crearFilaGasto(concepto = '', cliente = '', entidad = '') {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -157,11 +224,13 @@
     agregarBonificacion({ descripcion: 'Seguro de hogar', puntos: '0,20 p.p.' });
   }
 
-  // ---------- Lectura / escritura del formulario ----------
+  // ---------- Lectura / escritura ----------
   function leerDatos() {
     const d = {};
     for (const el of form.elements) {
-      if (el.name && !el.name.endsWith('[]')) d[el.name] = (el.value || '').trim();
+      if (el.name && !el.name.endsWith('[]') && el.type !== 'file') {
+        d[el.name] = (el.value || '').trim();
+      }
     }
     d._bonificaciones = [...listaBonificaciones.querySelectorAll('.fila-dinamica')].map((fila) => ({
       descripcion: fila.querySelector('input[name="bonif_desc[]"]')?.value.trim() || '',
@@ -172,17 +241,16 @@
       cliente: tr.querySelector('input[name="gasto_cliente[]"]')?.value.trim() || '',
       entidad: tr.querySelector('input[name="gasto_entidad[]"]')?.value.trim() || '',
     })).filter((g) => g.concepto || g.cliente || g.entidad);
+    if (logoIzquierdoDataUrl) d._logoIzq = logoIzquierdoDataUrl;
+    if (logoDerechoDataUrl) d._logoDer = logoDerechoDataUrl;
     return d;
   }
 
   function aplicarDatosAlFormulario(datos) {
     if (!datos) datos = {};
     form.reset();
-
-    // 1) Aplica campos fijos primero (así nunca se sobreescriben)
     aplicarCamposFijos();
 
-    // 2) Aplica el resto de campos desde el borrador, saltando los fijos
     for (const [k, v] of Object.entries(datos)) {
       if (k.startsWith('_')) continue;
       if (k in FIXED_FIELDS) continue;
@@ -190,7 +258,10 @@
       if (el) el.value = v ?? '';
     }
 
-    // 3) Listas dinámicas
+    // Logos (o defaults)
+    logoIzquierdoDataUrl = datos._logoIzq || null;
+    logoDerechoDataUrl = datos._logoDer || null;
+
     listaBonificaciones.innerHTML = '';
     const bonif = Array.isArray(datos._bonificaciones) ? datos._bonificaciones : [];
     if (bonif.length) bonif.forEach(agregarBonificacion);
@@ -204,7 +275,7 @@
     actualizarBloqueMixta();
   }
 
-  // ---------- Bloque "Mixta" ----------
+  // ---------- Bloque Mixta ----------
   function actualizarBloqueMixta() {
     const esMixta = selectTipoInteres.value === 'Mixta';
     bloqueMixta.hidden = !esMixta;
@@ -226,9 +297,7 @@
   function saveDrafts(arr) {
     try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(arr)); } catch (_) {}
   }
-  function findDraft(id) {
-    return getDrafts().find((d) => d.id === id);
-  }
+  function findDraft(id) { return getDrafts().find((d) => d.id === id); }
   function upsertDraft(draft) {
     const drafts = getDrafts();
     const i = drafts.findIndex((d) => d.id === draft.id);
@@ -250,11 +319,9 @@
     }
   }
 
-  // ---------- Autosave ----------
   function autosave() {
     const datos = leerDatos();
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(datos)); } catch (_) {}
-
     if (currentDraftId) {
       const draft = findDraft(currentDraftId);
       if (draft) {
@@ -274,18 +341,11 @@
     }
   }
 
-  // ---------- Guardar ----------
   function guardarBorradorActual() {
-    if (!currentDraftId) {
-      guardarComoNuevoBorrador();
-      return;
-    }
+    if (!currentDraftId) { guardarComoNuevoBorrador(); return; }
     const datos = leerDatos();
     const draft = findDraft(currentDraftId);
-    if (!draft) {
-      guardarComoNuevoBorrador();
-      return;
-    }
+    if (!draft) { guardarComoNuevoBorrador(); return; }
     draft.datos = datos;
     draft.updatedAt = new Date().toISOString();
     if (!draft.nombre && datos.nombreCliente) draft.nombre = datos.nombreCliente;
@@ -302,24 +362,19 @@
     const nombreFinal = (nombre || '').trim() || 'Sin nombre';
     const id = generarId();
     const now = new Date().toISOString();
-    const draft = {
-      id,
-      nombre: nombreFinal,
-      createdAt: now,
-      updatedAt: now,
-      datos,
-    };
+    const draft = { id, nombre: nombreFinal, createdAt: now, updatedAt: now, datos };
     upsertDraft(draft);
     currentDraftId = id;
     currentDraftName = nombreFinal;
     actualizarBarra();
   }
 
-  // ---------- Nuevo ----------
   function nuevoBorrador() {
     if (!confirm('¿Crear un borrador nuevo? Los datos no guardados se perderán.')) return;
     currentDraftId = null;
     currentDraftName = '';
+    logoIzquierdoDataUrl = null;
+    logoDerechoDataUrl = null;
     localStorage.removeItem(STORAGE_KEY);
     form.reset();
     form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
@@ -331,7 +386,6 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  // ---------- Abrir ----------
   function abrirBorrador(id) {
     const draft = findDraft(id);
     if (!draft) { alert('Borrador no encontrado.'); return; }
@@ -344,7 +398,6 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  // ---------- Eliminar ----------
   function eliminarBorrador(id) {
     const draft = findDraft(id);
     if (!draft) return;
@@ -358,7 +411,6 @@
     renderizarListaDrafts();
   }
 
-  // ---------- Renombrar ----------
   function renombrarBorrador(id) {
     const draft = findDraft(id);
     if (!draft) return;
@@ -369,14 +421,10 @@
     draft.nombre = nombreFinal;
     draft.updatedAt = new Date().toISOString();
     upsertDraft(draft);
-    if (currentDraftId === id) {
-      currentDraftName = nombreFinal;
-      actualizarBarra();
-    }
+    if (currentDraftId === id) { currentDraftName = nombreFinal; actualizarBarra(); }
     renderizarListaDrafts();
   }
 
-  // ---------- Duplicar ----------
   function duplicarBorrador(id) {
     const draft = findDraft(id);
     if (!draft) return;
@@ -389,7 +437,6 @@
     renderizarListaDrafts();
   }
 
-  // ---------- Exportar ----------
   function exportarBorrador(id) {
     const draft = findDraft(id);
     if (!draft) return;
@@ -406,7 +453,6 @@
     descargarBlob(blob, nombre);
   }
 
-  // ---------- Importar ----------
   function importarBorradores(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -423,20 +469,15 @@
           copia.createdAt = copia.createdAt || new Date().toISOString();
           copia.updatedAt = new Date().toISOString();
           copia.importedAt = new Date().toISOString();
-          // Fuerza los campos fijos por si vienen distintos en el JSON
-          for (const [k, v] of Object.entries(FIXED_FIELDS)) {
-            copia.datos[k] = v;
-          }
+          for (const [k, v] of Object.entries(FIXED_FIELDS)) copia.datos[k] = v;
           drafts.push(copia);
           añadidos++;
         });
         saveDrafts(drafts);
         renderizarListaDrafts();
-        if (añadidos === 0) {
-          alert('No se encontraron borradores válidos en el archivo.');
-        } else {
-          alert(`${añadidos} borrador(es) importado(s) correctamente.`);
-        }
+        alert(añadidos === 0
+          ? 'No se encontraron borradores válidos en el archivo.'
+          : `${añadidos} borrador(es) importado(s) correctamente.`);
       } catch (err) {
         console.error(err);
         alert('Error al importar el archivo: ' + err.message);
@@ -446,7 +487,6 @@
     reader.readAsText(file);
   }
 
-  // ---------- Render lista ----------
   function renderizarListaDrafts() {
     const drafts = getDrafts().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
     if (!drafts.length) {
@@ -491,7 +531,6 @@
     });
   }
 
-  // ---------- Modal borradores ----------
   function abrirDraftsModal() {
     renderizarListaDrafts();
     draftsModal.hidden = false;
@@ -503,7 +542,7 @@
   }
 
   // =========================================================
-  // ================  TEXTO DEL DOCUMENTO  ==================
+  // ================  TEXTOS  ===============================
   // =========================================================
   function textos(d) {
     const conclusionDefault =
@@ -598,7 +637,16 @@
       </tr>`
     ).join('');
 
+    // Logos: preferimos el dataURL subido, si no el archivo por defecto
+    const srcIzq = d._logoIzq || LOGO_IZQ_DEFAULT;
+    const srcDer = d._logoDer || LOGO_DER_DEFAULT;
+
     return `
+      <div class="doc-header-logos">
+        <img class="logo-left" src="${esc(srcIzq)}" alt="Logo izquierdo" />
+        <img class="logo-right" src="${esc(srcDer)}" alt="Logo derecho" />
+      </div>
+
       <h1 class="doc-title">Propuesta de Financiación Hipotecaria</h1>
       <p class="doc-subtitle">${esc(t.subtitle)}</p>
 
@@ -668,7 +716,6 @@
     `;
   }
 
-  // ---------- Modales vista previa ----------
   function abrirModal() {
     const d = leerDatos();
     if (!d.nombreCliente) {
@@ -677,389 +724,4 @@
       return;
     }
     ultimosDatos = d;
-    previewContent.innerHTML = construirHTML(d);
-    modal.hidden = false;
-    document.body.style.overflow = 'hidden';
-    modal.querySelector('.modal-body').scrollTop = 0;
-  }
-  function cerrarModal() {
-    modal.hidden = true;
-    document.body.style.overflow = '';
-  }
-
-  // =========================================================
-  // ================  DOCX  =================================
-  // =========================================================
-  const BORDER = { style: BorderStyle.SINGLE, size: 4, color: 'CBD5E1' };
-
-  function celdaDocx(texto, { bold = false, fill = null, width = null, align = null } = {}) {
-    const parrafo = new Paragraph({
-      alignment: align || AlignmentType.LEFT,
-      children: [new TextRun({ text: String(texto ?? ''), bold, size: 22, font: FONT_DOCX })],
-    });
-    const opts = {
-      children: [parrafo],
-      margins: { top: 80, bottom: 80, left: 120, right: 120 },
-    };
-    if (fill) opts.shading = { type: ShadingType.CLEAR, fill, color: 'auto' };
-    if (width) opts.width = { size: width, type: WidthType.PERCENTAGE };
-    return new TableCell(opts);
-  }
-
-  function tablaDocx(rows, { header = null, widths = null } = {}) {
-    const trs = [];
-    if (header) {
-      trs.push(new TableRow({
-        tableHeader: true,
-        children: header.map((h, i) => celdaDocx(h, {
-          bold: true, fill: '1E3A8A', width: widths?.[i] ?? null,
-        })),
-      }));
-    }
-    rows.forEach((r) => {
-      trs.push(new TableRow({
-        children: r.map((c, i) => {
-          if (typeof c === 'object' && c !== null) {
-            return celdaDocx(c.text, {
-              bold: c.bold,
-              fill: c.fill,
-              width: widths?.[i] ?? null,
-              align: c.align,
-            });
-          }
-          return celdaDocx(c, { width: widths?.[i] ?? null });
-        }),
-      }));
-    });
-    return new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: {
-        top: BORDER, bottom: BORDER, left: BORDER, right: BORDER,
-        insideHorizontal: BORDER, insideVertical: BORDER,
-      },
-      rows: trs,
-    });
-  }
-
-  function tablaDatosDocx(rows) {
-    return tablaDocx(rows.map(([k, v]) => [
-      { text: k, bold: true, fill: 'F1F5F9' },
-      v,
-    ]), { widths: [40, 60] });
-  }
-
-  function tituloDocx(texto) {
-    return new Paragraph({
-      heading: HeadingLevel.HEADING_1,
-      spacing: { before: 320, after: 160 },
-      children: [new TextRun({ text: texto, bold: true, color: '1E3A8A', size: 26, font: FONT_DOCX })],
-    });
-  }
-
-  function parrafoDocx(texto) {
-    return new Paragraph({
-      spacing: { after: 120 },
-      children: [new TextRun({ text: String(texto ?? ''), size: 22, font: FONT_DOCX })],
-    });
-  }
-
-  function parrafoDestacadoDocx(texto, { size = 24, bold = false, color = null } = {}) {
-    return new Paragraph({
-      spacing: { after: 120 },
-      children: [new TextRun({
-        text: String(texto ?? ''), size, bold, font: FONT_DOCX,
-        color: color || undefined,
-      })],
-    });
-  }
-
-  function vinetaDocx(texto) {
-    return new Paragraph({
-      bullet: { level: 0 },
-      spacing: { after: 60 },
-      children: [new TextRun({ text: String(texto ?? ''), size: 22, font: FONT_DOCX })],
-    });
-  }
-
-  function construirDocumentoDOCX(d) {
-    const t = textos(d);
-
-    const filasCabecera = [];
-    if (d.oficina) filasCabecera.push(['Oficina', d.oficina]);
-    if (d.gestor) filasCabecera.push(['Gestor', d.gestor]);
-    if (d.expediente) filasCabecera.push(['Expediente', d.expediente]);
-    if (d.emailGestor) filasCabecera.push(['Email gestor', d.emailGestor]);
-    if (d.telefonoGestor) filasCabecera.push(['Teléfono gestor', d.telefonoGestor]);
-
-    const tablaOperacion = tablaDatosDocx([
-      ['Precio de compra', eur(d.precioCompra)],
-      ['Importe del préstamo hipotecario', eur(d.capitalHipotecario)],
-      ['Plazo', (d.plazoAnos || '—') + ' años'],
-      ['Tipo elegido', d.tipoInteres || '—'],
-      ['Producto comercial', d.productoComercial || '—'],
-      ['Finalidad', d.finalidad || '—'],
-      ['Tipo de inmueble', d.tipoInmueble || '—'],
-      ['Ubicación del inmueble', d.ubicacionInmueble || '—'],
-    ]);
-
-    const filasCond = [
-      ['Cuota mensual — con bonificación', eur(d.cuotaBonificada)],
-      ['Cuota mensual — sin bonificación', eur(d.cuotaSinBonificar)],
-      ['TIN — con bonificación', pct(d.tinBonificado)],
-      ['TIN — sin bonificación', pct(d.tinSinBonificar)],
-      ['TAE — con bonificación', pct(d.taeBonificada)],
-      ['TAE — sin bonificación', pct(d.taeSinBonificar)],
-      ['Importe total adeudado — con bonificación', eur(d.importeTotalBonificado)],
-      ['Importe total adeudado — sin bonificación', eur(d.importeTotalSinBonificar)],
-    ];
-    if (d.numeroCuotas) filasCond.push(['Número de cuotas', d.numeroCuotas]);
-    const tablaCondiciones = tablaDatosDocx(filasCond);
-
-    const children = [
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 80 },
-        children: [new TextRun({
-          text: 'Propuesta de Financiación Hipotecaria',
-          bold: true, size: 34, color: '1E3A8A', font: FONT_DOCX,
-        })],
-      }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 320 },
-        children: [new TextRun({
-          text: t.subtitle, italics: true, color: '64748B', size: 20, font: FONT_DOCX,
-        })],
-      }),
-    ];
-
-    if (filasCabecera.length) children.push(tablaDatosDocx(filasCabecera));
-
-    children.push(tituloDocx('1. Datos de la operación'), tablaOperacion);
-
-    children.push(
-      tituloDocx('2. Condiciones financieras'),
-      tablaCondiciones,
-      parrafoDocx(t.condiciones),
-      ...t.detalleCondiciones.map(vinetaDocx),
-    );
-
-    if (d._bonificaciones.length) {
-      const tablaBonif = tablaDocx(
-        d._bonificaciones.map((b) => [b.descripcion, b.puntos || '—']),
-        { header: ['Producto / Servicio', 'Bonificación'], widths: [70, 30] }
-      );
-      children.push(tituloDocx('3. Bonificaciones aplicables'), tablaBonif);
-    }
-
-    const tablaComisiones = tablaDatosDocx([
-      ['Comisión de apertura', d.comisionApertura || '0 €'],
-      ['Reembolso anticipado parcial (10 primeros años)', d.reembolsoParcial10 || '—'],
-      ['Reembolso anticipado parcial (resto)', d.reembolsoParcialResto || '—'],
-      ['Reembolso anticipado total (10 primeros años)', d.reembolsoTotal10 || '—'],
-      ['Reembolso anticipado total (resto)', d.reembolsoTotalResto || '—'],
-    ]);
-    children.push(tituloDocx('4. Comisiones'), tablaComisiones);
-
-    const filasGastosDocx = d._gastos.map((g) => [
-      g.concepto,
-      g.cliente ? eur(g.cliente) : '—',
-      g.entidad ? eur(g.entidad) : '—',
-    ]);
-    filasGastosDocx.push([
-      { text: 'Total', bold: true },
-      { text: eur(d.totalCliente), bold: true, align: AlignmentType.RIGHT },
-      { text: eur(d.totalEntidad), bold: true, align: AlignmentType.RIGHT },
-    ]);
-    const tablaGastos = tablaDocx(filasGastosDocx, {
-      header: ['Concepto', 'Cliente', 'Entidad'],
-      widths: [50, 25, 25],
-    });
-    children.push(tituloDocx('5. Desglose de gastos'), tablaGastos);
-
-    children.push(
-      tituloDocx('6. Aportación y ahorros'),
-      vinetaDocx(`Ahorros del cliente: ${eur(d.ahorrosCliente)}.`),
-      vinetaDocx(`Arras / PYS: ${eur(d.arrasPys)}.`),
-    );
-
-    children.push(
-      tituloDocx('7. Ahorro total a aportar por el cliente'),
-      parrafoDocx('El cliente deberá aportar de fondos propios un total de:'),
-      parrafoDestacadoDocx(eur(d.ahorroTotalAportar), { size: 32, bold: true, color: '1E3A8A' }),
-      parrafoDocx(t.textoAhorro),
-    );
-
-    children.push(tituloDocx('Conclusión'), parrafoDocx(t.conclusion));
-
-    children.push(
-      new Paragraph({
-        spacing: { before: 400, after: 120 },
-        border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'CBD5E1', space: 8 } },
-        children: [new TextRun({
-          text: t.notasLegales,
-          size: 18, italics: true, color: '64748B', font: FONT_DOCX,
-        })],
-      }),
-    );
-
-    return new Document({
-      creator: 'Generador de Propuestas',
-      title: `Propuesta de financiación hipotecaria - ${d.nombreCliente || ''}`,
-      styles: {
-        default: {
-          document: {
-            run: { font: FONT_DOCX, size: 22 },
-            paragraph: { spacing: { after: 120 } },
-          },
-        },
-      },
-      sections: [{
-        properties: {
-          page: { margin: { top: 1000, bottom: 1000, left: 1100, right: 1100 } },
-        },
-        children,
-      }],
-    });
-  }
-
-  // ---------- Descargas ----------
-  function descargarBlob(blob, nombre) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = nombre;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  function nombreArchivo(ext) {
-    const base = (ultimosDatos?.nombreCliente || 'cliente').replace(/\s+/g, '_');
-    return `Propuesta_${base}_${new Date().getFullYear()}.${ext}`;
-  }
-
-  async function descargarDOCX() {
-    if (!ultimosDatos) return;
-    const orig = btnGenerar.textContent;
-    btnGenerar.disabled = true;
-    btnGenerar.textContent = 'Generando…';
-    try {
-      const doc = construirDocumentoDOCX(ultimosDatos);
-      const blob = await Packer.toBlob(doc);
-      descargarBlob(blob, nombreArchivo('docx'));
-    } catch (err) {
-      console.error(err);
-      alert('Error al generar el DOCX: ' + err.message);
-    } finally {
-      btnGenerar.disabled = false;
-      btnGenerar.textContent = orig;
-    }
-  }
-
-  // ---------- Eventos ----------
-  form.addEventListener('input', autosave);
-  form.addEventListener('change', autosave);
-  selectTipoInteres.addEventListener('change', () => { actualizarBloqueMixta(); autosave(); });
-
-  btnPreview.addEventListener('click', abrirModal);
-  btnGenerar.addEventListener('click', descargarDOCX);
-  btnClose.addEventListener('click', cerrarModal);
-  modal.addEventListener('click', (e) => { if (e.target.matches('[data-close]')) cerrarModal(); });
-
-  // Borradores
-  btnNuevo.addEventListener('click', nuevoBorrador);
-  btnGuardar.addEventListener('click', guardarBorradorActual);
-  btnGuardarComo.addEventListener('click', guardarComoNuevoBorrador);
-  btnMisBorradores.addEventListener('click', abrirDraftsModal);
-
-  draftsModal.addEventListener('click', (e) => {
-    if (e.target.matches('[data-close-drafts]')) cerrarDraftsModal();
-  });
-  btnExportarTodos.addEventListener('click', exportarTodos);
-  btnImportar.addEventListener('click', () => inputImportar.click());
-  inputImportar.addEventListener('change', (e) => {
-    const file = e.target.files?.[0];
-    if (file) importarBorradores(file);
-    inputImportar.value = '';
-  });
-
-  // Limpiar formulario
-  btnLimpiar.addEventListener('click', () => {
-    if (!confirm('¿Vaciar todos los campos del formulario? El borrador activo no se eliminará.')) return;
-    form.reset();
-    form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
-    aplicarCamposFijos();
-    inicializarBonificaciones();
-    inicializarGastos();
-    actualizarBloqueMixta();
-    autosave();
-  });
-
-  // Escape cierra modales
-  document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    if (!modal.hidden) cerrarModal();
-    if (!draftsModal.hidden) cerrarDraftsModal();
-  });
-
-  // Botón "+ Añadir bonificación"
-  document.querySelector('[data-add="bonificaciones"]').addEventListener('click', () => {
-    agregarBonificacion();
-    autosave();
-  });
-
-  // ---------- Init ----------
-  document.addEventListener('DOMContentLoaded', () => {
-    cargarScratch();
-    if (!form.elements.fechaDocumento.value) {
-      form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
-    }
-    aplicarCamposFijos();
-    actualizarBloqueMixta();
-    actualizarBarra();
-  });
-
-  // =========================================================
-  // ==========  SERVICE WORKER (sw-v3.js)  ==================
-  // =========================================================
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', async () => {
-      try {
-        // 1) Desregistra cualquier SW antiguo
-        const regs = await navigator.serviceWorker.getRegistrations();
-        for (const r of regs) {
-          const url = (r.active || r.installing || r.waiting || {}).scriptURL || '';
-          if (url.indexOf('sw-v3.js') === -1) {
-            try { await r.unregister(); } catch (_) {}
-          }
-        }
-
-        // 2) Registra el nuevo
-        const reg = await navigator.serviceWorker.register('sw-v3.js');
-        reg.update();
-        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-        reg.addEventListener('updatefound', () => {
-          const nuevo = reg.installing;
-          if (!nuevo) return;
-          nuevo.addEventListener('statechange', () => {
-            if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
-              window.location.reload();
-            }
-          });
-        });
-
-        // 3) Comprueba updates cada 60 s y al volver el foco
-        setInterval(() => {
-          navigator.serviceWorker.getRegistration().then((r) => r?.update());
-        }, 60 * 1000);
-        window.addEventListener('focus', () => {
-          navigator.serviceWorker.getRegistration().then((r) => r?.update());
-        });
-      } catch (e) {
-        console.warn('SW error:', e);
-      }
-    });
-  }
-})();
+    previewContent.innerHTML = construirHTML

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Generador de Propuestas Hipotecarias</title>
+  <meta name="theme-color" content="#1e3a8a" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Limpieza: desregistra SW antiguos y borra TODAS las cachés -->
+  <script>
+    (function cleanupOldSW() {
+      if (!('serviceWorker' in navigator)) return;
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (reg) {
+          var url = (reg.active || reg.installing || reg.waiting || {}).scriptURL || '';
+          if (url.indexOf('sw-v3.js') === -1) {
+            console.log('[cleanup] Desregistrando SW antiguo:', url);
+            reg.unregister();
+          }
+        });
+      }).catch(function () {});
+      if ('caches' in window) {
+        caches.keys().then(function (keys) {
+          keys.forEach(function (k) {
+            if (k.indexOf('v10') === -1) {
+              console.log('[cleanup] Borrando caché antigua:', k);
+              caches.delete(k);
+            }
+          });
+        }).catch(function () {});
+      }
+    })();
+  </script>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Propuesta de Financiación Hipotecaria</h1>
+    <p>Rellena los datos y genera el documento Word</p>
+  </header>
+
+  <!-- Barra de borradores -->
+  <div class="draft-bar">
+    <div class="draft-info">
+      <span class="draft-label">Borrador actual:</span>
+      <span id="draftStatus" class="draft-status">Sin guardar</span>
+    </div>
+    <div class="draft-actions">
+      <button type="button" id="btnNuevo" class="btn-ghost">Nuevo</button>
+      <button type="button" id="btnGuardar" class="btn-ghost">Guardar</button>
+      <button type="button" id="btnGuardarComo" class="btn-ghost">Guardar como…</button>
+      <button type="button" id="btnMisBorradores" class="btn-ghost">Mis borradores</button>
+    </div>
+  </div>
+
+  <main>
+    <form id="formPropuesta" autocomplete="off">
+      <!-- ============ DATOS GENERALES ============ -->
+      <fieldset>
+        <legend>Datos generales</legend>
+        <label>Nombre del cliente
+          <input type="text" name="nombreCliente" required placeholder="Ej. Irene Sánchez Palou" />
+        </label>
+        <label>DNI / NIF
+          <input type="text" name="dniCliente" placeholder="Ej. 47654945A" />
+        </label>
+        <label>Fecha del documento
+          <input type="date" name="fechaDocumento" />
+        </label>
+        <label>Oficina
+          <select name="oficina">
+            <option value="">— Selecciona —</option>
+            <option value="Aguas">Aguas</option>
+            <option value="Av/ Madrid">Av/ Madrid</option>
+            <option value="Capellades">Capellades</option>
+            <option value="Collblanch">Collblanch</option>
+            <option value="Cornellà">Cornellà</option>
+            <option value="Enric Prat de la Riba">Enric Prat de la Riba</option>
+            <option value="Maladeta">Maladeta</option>
+            <option value="St. Andreu de la Barca">St. Andreu de la Barca</option>
+            <option value="Piera">Piera</option>
+            <option value="PVP">PVP</option>
+          </select>
+        </label>
+        <label>Gestor / Comercial
+          <input type="text" name="gestor" value="Héctor Company" readonly />
+        </label>
+        <label>Expediente
+          <input type="text" name="expediente" placeholder="Ej. 2026715600000246" />
+        </label>
+        <label>Email gestor
+          <input type="text" name="emailGestor" value="bgg@bgestionglobal.net" readonly />
+        </label>
+        <label>Teléfono gestor
+          <input type="text" name="telefonoGestor" value="602250255" readonly />
+        </label>
+      </fieldset>
+
+      <!-- ============ 1. DATOS DE LA OPERACIÓN ============ -->
+      <fieldset>
+        <legend>1. Datos de la operación</legend>
+        <label>Precio de compra (€)
+          <input type="text" name="precioCompra" placeholder="283.000,00" />
+        </label>
+        <label>Importe del préstamo hipotecario (€)
+          <input type="text" name="capitalHipotecario" placeholder="175.000,00" />
+        </label>
+        <label>Plazo (años)
+          <input type="text" name="plazoAnos" placeholder="30" />
+        </label>
+        <label>Tipo elegido
+          <select name="tipoInteres">
+            <option value="Fijo">Fijo</option>
+            <option value="Variable">Variable</option>
+            <option value="Mixta">Mixta</option>
+          </select>
+        </label>
+        <label>Producto comercial
+          <input type="text" name="productoComercial" placeholder="Ej. HIP.OPORTUNIDAD FIJA" />
+        </label>
+        <label>Finalidad
+          <input type="text" name="finalidad" placeholder="Ej. ADQ. VVDA. 1ª RESID." />
+        </label>
+        <label>Tipo de inmueble
+          <input type="text" name="tipoInmueble" placeholder="Ej. PISO" />
+        </label>
+        <label>Ubicación del inmueble
+          <input type="text" name="ubicacionInmueble" placeholder="Ej. BARCELONA" />
+        </label>
+
+        <!-- Bloque condicional "Mixta" -->
+        <div id="bloqueMixta" class="bloque-mixta" hidden>
+          <p class="bloque-titulo">Detalles de la parte mixta</p>
+
+          <label>Años a tipo fijo
+            <input type="text" name="periodoFijoAnos" placeholder="10" />
+          </label>
+          <label>TIN fijo (%)
+            <input type="text" name="tinFijo" placeholder="2,20" />
+          </label>
+          <label>Índice variable
+            <select name="indiceVariable">
+              <option value="Euríbor 12M">Euríbor 12M</option>
+              <option value="Euríbor 6M">Euríbor 6M</option>
+              <option value="Euríbor 3M">Euríbor 3M</option>
+              <option value="IRPH">IRPH</option>
+            </select>
+          </label>
+          <label>Diferencial (%)
+            <input type="text" name="diferencialVariable" placeholder="0,75" />
+          </label>
+        </div>
+      </fieldset>
+
+      <!-- ============ 2. CONDICIONES FINANCIERAS ============ -->
+      <fieldset>
+        <legend>2. Condiciones financieras</legend>
+        <label>Cuota mensual — con bonificación (€)
+          <input type="text" name="cuotaBonificada" placeholder="664,60" />
+        </label>
+        <label>Cuota mensual — sin bonificación (€)
+          <input type="text" name="cuotaSinBonificar" placeholder="755,64" />
+        </label>
+        <label>TIN — con bonificación (%)
+          <input type="text" name="tinBonificado" placeholder="2,20" />
+        </label>
+        <label>TIN — sin bonificación (%)
+          <input type="text" name="tinSinBonificar" placeholder="3,20" />
+        </label>
+        <label>TAE — con bonificación (%)
+          <input type="text" name="taeBonificada" placeholder="3,02" />
+        </label>
+        <label>TAE — sin bonificación (%)
+          <input type="text" name="taeSinBonificar" placeholder="3,28" />
+        </label>
+        <label>Importe total adeudado — con bonificación (€)
+          <input type="text" name="importeTotalBonificado" placeholder="264.498,88" />
+        </label>
+        <label>Importe total adeudado — sin bonificación (€)
+          <input type="text" name="importeTotalSinBonificar" placeholder="273.685,68" />
+        </label>
+        <label>Número de cuotas
+          <input type="text" name="numeroCuotas" placeholder="360" />
+        </label>
+      </fieldset>
+
+      <!-- ============ 3. BONIFICACIONES ============ -->
+      <fieldset>
+        <legend>3. Bonificaciones aplicables</legend>
+        <div class="lista-dinamica" id="listaBonificaciones"></div>
+        <button type="button" class="btn-add" data-add="bonificaciones">+ Añadir bonificación</button>
+      </fieldset>
+
+      <!-- ============ 4. COMISIONES ============ -->
+      <fieldset>
+        <legend>4. Comisiones</legend>
+        <label>Comisión de apertura
+          <input type="text" name="comisionApertura" placeholder="0 €" />
+        </label>
+        <label>Reembolso anticipado parcial (10 primeros años)
+          <input type="text" name="reembolsoParcial10" placeholder="1,00%" />
+        </label>
+        <label>Reembolso anticipado parcial (resto)
+          <input type="text" name="reembolsoParcialResto" placeholder="1,00%" />
+        </label>
+        <label>Reembolso anticipado total (10 primeros años)
+          <input type="text" name="reembolsoTotal10" placeholder="2,00%" />
+        </label>
+        <label class="full">Reembolso anticipado total (resto)
+          <input type="text" name="reembolsoTotalResto" placeholder="1,50%" />
+        </label>
+      </fieldset>
+
+      <!-- ============ 5. DESGLOSE DE GASTOS ============ -->
+      <fieldset>
+        <legend>5. Desglose de gastos</legend>
+        <div class="tabla-gastos-wrap">
+          <table class="tabla-gastos">
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th>Cliente (€)</th>
+                <th>Entidad (€)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbodyGastos"></tbody>
+          </table>
+        </div>
+        <div class="totales-gastos">
+          <label>Total a asumir por el cliente (€)
+            <input type="text" name="totalCliente" placeholder="30.871,82" />
+          </label>
+          <label>Total a asumir por la entidad (€)
+            <input type="text" name="totalEntidad" placeholder="7.021,19" />
+          </label>
+        </div>
+      </fieldset>
+
+      <!-- ============ 6. APORTACIÓN Y AHORROS ============ -->
+      <fieldset>
+        <legend>6. Aportación y ahorros</legend>
+        <label>Ahorros del cliente (€)
+          <input type="text" name="ahorrosCliente" placeholder="140.000,00" />
+        </label>
+        <label>Arras / PYS (€)
+          <input type="text" name="arrasPys" placeholder="28.300,00" />
+        </label>
+      </fieldset>
+
+      <!-- ============ 7. AHORRO TOTAL A APORTAR ============ -->
+      <fieldset>
+        <legend>7. Ahorro total a aportar por el cliente</legend>
+        <label class="full">Importe total a aportar (€)
+          <input type="text" name="ahorroTotalAportar" placeholder="138.871,82" />
+        </label>
+        <label class="full">Texto explicativo (opcional)
+          <textarea name="textoAhorro" rows="2" placeholder="(Precio de compra − Importe financiado + comisiones y gastos a su cargo)"></textarea>
+        </label>
+      </fieldset>
+
+      <!-- ============ TEXTOS PERSONALIZABLES ============ -->
+      <fieldset>
+        <legend>Textos personalizables (opcional)</legend>
+        <label class="full">Párrafo de conclusión
+          <textarea name="textoConclusion" rows="3" placeholder="Déjalo vacío para usar el texto por defecto"></textarea>
+        </label>
+        <label class="full">Notas legales
+          <textarea name="notasLegales" rows="3" placeholder="Déjalo vacío para usar las notas por defecto"></textarea>
+        </label>
+      </fieldset>
+
+      <div class="actions">
+        <button type="button" id="btnPreview" class="btn-primary">Vista previa</button>
+        <button type="button" id="btnLimpiar" class="btn-secondary">Limpiar formulario</button>
+      </div>
+    </form>
+  </main>
+
+  <!-- ============ MODAL VISTA PREVIA ============ -->
+  <div id="previewModal" class="modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel">
+      <div class="modal-toolbar">
+        <button type="button" id="btnGenerar" class="btn-primary">Descargar DOCX</button>
+        <button type="button" id="btnClose" class="btn-secondary" data-close>Cerrar</button>
+      </div>
+      <div class="modal-body">
+        <div id="previewContent" class="doc-preview"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL MIS BORRADORES ============ -->
+  <div id="draftsModal" class="modal" hidden>
+    <div class="modal-backdrop" data-close-drafts></div>
+    <div class="modal-panel">
+      <div class="modal-toolbar">
+        <button type="button" id="btnImportar" class="btn-secondary">Importar JSON</button>
+        <button type="button" id="btnExportarTodos" class="btn-secondary">Exportar todos</button>
+        <button type="button" class="btn-primary" data-close-drafts>Cerrar</button>
+      </div>
+      <input type="file" id="inputImportar" accept="application/json,.json" hidden />
+      <div class="modal-body">
+        <div id="listaDrafts" class="lista-drafts"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

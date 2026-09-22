@@ -26,7 +26,6 @@ body {
 .app-header h1 { font-size: 1.5rem; color: var(--primary); margin-bottom: .25rem; }
 .app-header p { color: var(--muted); font-size: .95rem; }
 
-/* ---------- Barra de borradores ---------- */
 .draft-bar {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -41,16 +40,8 @@ body {
   box-shadow: 0 1px 3px rgba(15, 23, 42, .04);
 }
 
-.draft-info {
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-  font-size: .85rem;
-  min-width: 0;
-}
-
+.draft-info { display: flex; align-items: center; gap: .4rem; font-size: .85rem; min-width: 0; }
 .draft-label { color: var(--muted); font-weight: 500; }
-
 .draft-status {
   color: var(--primary);
   font-weight: 600;
@@ -59,14 +50,8 @@ body {
   text-overflow: ellipsis;
   max-width: 260px;
 }
-
 .draft-status.unsaved { color: var(--muted); font-style: italic; font-weight: 500; }
-
-.draft-actions {
-  display: flex;
-  gap: .4rem;
-  flex-wrap: wrap;
-}
+.draft-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
 
 .btn-ghost {
   background: transparent;
@@ -109,8 +94,16 @@ label {
   color: var(--muted);
   font-weight: 500;
 }
-
 label.full { grid-column: 1 / -1; }
+
+.hint {
+  grid-column: 1 / -1;
+  font-size: .78rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: .25rem;
+}
+.hint code { background: #f1f5f9; padding: .1rem .3rem; border-radius: 4px; font-style: normal; }
 
 input, select, textarea {
   font: inherit;
@@ -128,21 +121,10 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
 }
 
-input[readonly] {
-  background: #f8fafc;
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
+input[readonly] { background: #f8fafc; color: var(--muted); cursor: not-allowed; }
 textarea { resize: vertical; min-height: 70px; }
 
-.actions {
-  display: flex;
-  gap: .75rem;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin: .5rem 0 2rem;
-}
+.actions { display: flex; gap: .75rem; flex-wrap: wrap; justify-content: center; margin: .5rem 0 2rem; }
 
 button {
   font: inherit;
@@ -153,7 +135,6 @@ button {
   cursor: pointer;
   transition: transform .05s, background .15s, box-shadow .15s;
 }
-
 button:active { transform: scale(.98); }
 button:disabled { opacity: .6; cursor: wait; }
 
@@ -175,7 +156,6 @@ button:disabled { opacity: .6; cursor: wait; }
 }
 .btn-add:hover { background: #dbeafe; }
 
-/* Bloque condicional: hipoteca mixta */
 .bloque-mixta {
   grid-column: 1 / -1;
   background: #f8fafc;
@@ -196,7 +176,6 @@ button:disabled { opacity: .6; cursor: wait; }
   margin: 0 0 .25rem;
 }
 
-/* Listas dinámicas */
 .lista-dinamica {
   grid-column: 1 / -1;
   display: flex;
@@ -223,19 +202,10 @@ button:disabled { opacity: .6; cursor: wait; }
 }
 .fila-dinamica .btn-remove:hover { background: #fecaca; }
 
-/* Tabla de gastos editable */
 .tabla-gastos-wrap { grid-column: 1 / -1; overflow-x: auto; }
-.tabla-gastos {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: .85rem;
-}
+.tabla-gastos { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .tabla-gastos th,
-.tabla-gastos td {
-  border: 1px solid var(--border);
-  padding: .4rem .5rem;
-  text-align: left;
-}
+.tabla-gastos td { border: 1px solid var(--border); padding: .4rem .5rem; text-align: left; }
 .tabla-gastos th {
   background: #f1f5f9;
   font-weight: 600;
@@ -249,10 +219,7 @@ button:disabled { opacity: .6; cursor: wait; }
   font-size: .85rem;
   background: transparent;
 }
-.tabla-gastos input:focus {
-  background: #fff;
-  box-shadow: 0 0 0 2px var(--primary-light);
-}
+.tabla-gastos input:focus { background: #fff; box-shadow: 0 0 0 2px var(--primary-light); }
 .tabla-gastos .btn-remove {
   background: var(--danger-bg);
   color: #991b1b;
@@ -274,7 +241,6 @@ button:disabled { opacity: .6; cursor: wait; }
   margin-top: .5rem;
 }
 
-/* ---------- Modal genérico ---------- */
 .modal {
   position: fixed;
   inset: 0;
@@ -319,13 +285,7 @@ button:disabled { opacity: .6; cursor: wait; }
 
 .modal-body { overflow: auto; padding: 1rem; background: #e2e8f0; }
 
-/* ---------- Lista de borradores ---------- */
-.lista-drafts {
-  display: flex;
-  flex-direction: column;
-  gap: .75rem;
-}
-
+.lista-drafts { display: flex; flex-direction: column; gap: .75rem; }
 .draft-item {
   background: #fff;
   border: 1px solid var(--border);
@@ -337,44 +297,15 @@ button:disabled { opacity: .6; cursor: wait; }
   gap: .75rem;
   flex-wrap: wrap;
 }
-
 .draft-item.active {
   border-color: var(--primary-light);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
 }
-
-.draft-item-info {
-  display: flex;
-  flex-direction: column;
-  gap: .15rem;
-  min-width: 0;
-  flex: 1;
-}
-
-.draft-item-name {
-  font-weight: 600;
-  color: var(--text);
-  font-size: .95rem;
-  word-break: break-word;
-}
-
-.draft-item-meta {
-  font-size: .75rem;
-  color: var(--muted);
-}
-
-.draft-item-actions {
-  display: flex;
-  gap: .35rem;
-  flex-wrap: wrap;
-}
-
-.draft-item-actions button {
-  padding: .35rem .7rem;
-  font-size: .78rem;
-  border-radius: 6px;
-}
-
+.draft-item-info { display: flex; flex-direction: column; gap: .15rem; min-width: 0; flex: 1; }
+.draft-item-name { font-weight: 600; color: var(--text); font-size: .95rem; word-break: break-word; }
+.draft-item-meta { font-size: .75rem; color: var(--muted); }
+.draft-item-actions { display: flex; gap: .35rem; flex-wrap: wrap; }
+.draft-item-actions button { padding: .35rem .7rem; font-size: .78rem; border-radius: 6px; }
 .draft-empty {
   text-align: center;
   padding: 2.5rem 1rem;
@@ -384,7 +315,6 @@ button:disabled { opacity: .6; cursor: wait; }
   border: 1px dashed var(--border);
   border-radius: 10px;
 }
-
 .btn-danger {
   background: #fff;
   color: var(--danger);
@@ -407,6 +337,21 @@ button:disabled { opacity: .6; cursor: wait; }
   box-shadow: 0 4px 20px rgba(15, 23, 42, .12);
   border-radius: 4px;
 }
+
+.doc-preview .doc-header-logos {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 24pt;
+}
+.doc-preview .doc-header-logos img {
+  max-height: 70pt;
+  max-width: 45%;
+  object-fit: contain;
+}
+.doc-preview .doc-header-logos .logo-left { align-self: flex-start; }
+.doc-preview .doc-header-logos .logo-right { align-self: flex-start; }
 
 .doc-preview .doc-title {
   font-size: 20pt;
@@ -451,14 +396,8 @@ button:disabled { opacity: .6; cursor: wait; }
   width: 40%;
 }
 .doc-preview .doc-table--gastos th,
-.doc-preview .doc-table--gastos td {
-  text-align: left;
-  width: auto;
-}
-.doc-preview .doc-table--gastos th {
-  background: #1E3A8A;
-  color: #fff;
-}
+.doc-preview .doc-table--gastos td { text-align: left; width: auto; }
+.doc-preview .doc-table--gastos th { background: #1E3A8A; color: #fff; }
 .doc-preview .doc-table--gastos td.num { text-align: right; white-space: nowrap; }
 
 .doc-preview .doc-highlight {

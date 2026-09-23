@@ -1,6 +1,5 @@
 // Service Worker minimalista.
 // No intercepta peticiones: todo va directo a la red.
-// Su única misión es habilitar la instalación PWA y limpiar cachés antiguas.
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -19,5 +18,3 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 });
-
-// Sin handler de 'fetch' → el navegador hace peticiones normales a la red.

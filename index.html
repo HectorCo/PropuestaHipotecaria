@@ -28,7 +28,7 @@
       if ('caches' in window) {
         caches.keys().then(function (keys) {
           keys.forEach(function (k) {
-            if (k.indexOf('v10') === -1) {
+            if (k.indexOf('v11') === -1) {
               console.log('[cleanup] Borrando caché antigua:', k);
               caches.delete(k);
             }
@@ -90,7 +90,7 @@
           <input type="text" name="gestor" value="Héctor Company" readonly />
         </label>
         <label>Expediente
-          <input type="text" name="expediente" placeholder="Ej. 2026715600000246" />
+          <input type="text" name="expediente" readonly placeholder="Se genera automáticamente" />
         </label>
         <label>Email gestor
           <input type="text" name="emailGestor" value="bgg@bgestionglobal.net" readonly />
@@ -98,6 +98,10 @@
         <label>Teléfono gestor
           <input type="text" name="telefonoGestor" value="602250255" readonly />
         </label>
+        <p class="hint full">
+          El expediente se genera automáticamente al guardar o al hacer vista previa con el formato
+          <code>AAAAMM#####</code> (año + mes + número de propuesta del mes).
+        </p>
       </fieldset>
 
       <!-- ============ LOGOS ============ -->

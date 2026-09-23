@@ -31,6 +31,7 @@
 
   const STORAGE_KEY = 'propuesta_scratch_v2';
   const DRAFTS_KEY = 'propuesta_drafts_v2';
+  const COUNTER_KEY = 'propuesta_expediente_counter_v1';
   const FONT_DOCX = 'Aptos, Calibri, Segoe UI, sans-serif';
 
   const FIXED_FIELDS = {
@@ -49,19 +50,90 @@
     'Seguro de daños',
   ];
 
-  // URLs por defecto de los logos (archivos en la raíz del proyecto)
   const LOGO_IZQ_DEFAULT = 'logo-b.png';
   const LOGO_DER_DEFAULT = 'logo-blanco.png';
-
-  // Medidas en píxeles aproximadas para el DOCX (EMU a 96 DPI ≈ px * 9525)
   const LOGO_MAX_WIDTH_PX = 150;
   const LOGO_MAX_HEIGHT_PX = 70;
 
   let ultimosDatos = null;
   let currentDraftId = null;
   let currentDraftName = '';
-  let logoIzquierdoDataUrl = null;   // null = usar el default por URL
+  let logoIzquierdoDataUrl = null;
   let logoDerechoDataUrl = null;
+
+  // =========================================================
+  // ============  EXPEDIENTE AUTOMÁTICO  ====================
+  // =========================================================
+  // Formato: AAAAMM#####  (año 4 dígitos + mes 2 dígitos + secuencia 5 dígitos)
+  // Ejemplo: 20260900001  -> primera propuesta de septiembre de 2026
+  //          20260900002  -> segunda propuesta del mismo mes
+  //          20261000001  -> primera propuesta de octubre de 2026
+
+  function cargarContadores() {
+    try { return JSON.parse(localStorage.getItem(COUNTER_KEY) || '{}'); }
+    catch { return {}; }
+  }
+  function guardarContadores(c) {
+    try { localStorage.setItem(COUNTER_KEY, JSON.stringify(c)); } catch (_) {}
+  }
+
+  // Devuelve "YYYYMM" a partir de una fecha ISO (yyyy-mm-dd) o de hoy
+  function claveMes(fechaIso) {
+    let d;
+    if (fechaIso) {
+      d = new Date(fechaIso + 'T00:00:00');
+      if (isNaN(d.getTime())) d = new Date();
+    } else {
+      d = new Date();
+    }
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}${m}`;
+  }
+
+  // Recorre los borradores y devuelve el mayor número de secuencia
+  // encontrado para un mes dado (según el campo `expediente`).
+  function mayorSecuenciaEnBorradores(clave) {
+    const drafts = getDrafts();
+    let max = 0;
+    const prefijo = clave; // 6 dígitos
+    for (const d of drafts) {
+      const exp = (d?.datos?.expediente || '').trim();
+      if (!exp || exp.length < 6) continue;
+      if (exp.slice(0, 6) !== prefijo) continue;
+      const sec = parseInt(exp.slice(6), 10);
+      if (!isNaN(sec) && sec > max) max = sec;
+    }
+    return max;
+  }
+
+  // Reserva un nuevo número de expediente para el mes indicado.
+  // Se apoya en el contador de localStorage pero también tiene en cuenta
+  // los borradores existentes (por si vienen importados de otro equipo).
+  function generarExpediente(fechaIso) {
+    const clave = claveMes(fechaIso);
+    const contadores = cargarContadores();
+    const maxBorradores = mayorSecuenciaEnBorradores(clave);
+    const actual = contadores[clave] || 0;
+    const base = Math.max(actual, maxBorradores);
+    const siguiente = base + 1;
+    contadores[clave] = siguiente;
+    guardarContadores(contadores);
+    return `${clave}${String(siguiente).padStart(5, '0')}`;
+  }
+
+  // Asigna un expediente al borrador activo si aún no tiene uno.
+  // Devuelve el expediente resultante.
+  function asegurarExpediente() {
+    const input = form.elements.expediente;
+    if (!input) return '';
+    const actual = (input.value || '').trim();
+    if (actual) return actual; // ya tiene uno, se respeta
+    const fecha = form.elements.fechaDocumento?.value || '';
+    const nuevo = generarExpediente(fecha);
+    input.value = nuevo;
+    return nuevo;
+  }
 
   // ---------- Utilidades ----------
   const eur = (v) => {
@@ -107,7 +179,7 @@
     .replace(/^_+|_+$/g, '')
     .slice(0, 60) || 'borrador';
 
-  // Convierte un dataURL a Uint8Array (para docx)
+  // Convierte un dataURL a Uint8Array
   function dataUrlToUint8(dataUrl) {
     const base64 = dataUrl.split(',')[1];
     const bin = atob(base64);
@@ -117,7 +189,6 @@
     return bytes;
   }
 
-  // Detecta el tipo de imagen a partir de un dataURL
   function dataUrlMime(dataUrl) {
     const m = /^data:([^;]+);/.exec(dataUrl || '');
     return m ? m[1] : 'image/png';
@@ -131,7 +202,6 @@
     return 'png';
   }
 
-  // Convierte un archivo a dataURL
   function fileToDataUrl(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -141,7 +211,6 @@
     });
   }
 
-  // Carga una imagen desde una URL y devuelve su dataURL
   async function urlToDataUrl(url) {
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error('No se pudo cargar ' + url);
@@ -149,7 +218,6 @@
     return await fileToDataUrl(blob);
   }
 
-  // Redimensiona una imagen proporcionalmente para que quepa en las medidas dadas
   async function resizeDataUrl(dataUrl, maxW, maxH) {
     return new Promise((resolve) => {
       const img = new Image();
@@ -166,7 +234,6 @@
     });
   }
 
-  // Aplica los campos fijos al formulario
   function aplicarCamposFijos() {
     for (const [k, v] of Object.entries(FIXED_FIELDS)) {
       const el = form.elements[k];
@@ -258,7 +325,6 @@
       if (el) el.value = v ?? '';
     }
 
-    // Logos (o defaults)
     logoIzquierdoDataUrl = datos._logoIzq || null;
     logoDerechoDataUrl = datos._logoDer || null;
 
@@ -275,7 +341,6 @@
     actualizarBloqueMixta();
   }
 
-  // ---------- Bloque Mixta ----------
   function actualizarBloqueMixta() {
     const esMixta = selectTipoInteres.value === 'Mixta';
     bloqueMixta.hidden = !esMixta;
@@ -342,6 +407,8 @@
   }
 
   function guardarBorradorActual() {
+    // Antes de guardar, asegura que hay expediente
+    asegurarExpediente();
     if (!currentDraftId) { guardarComoNuevoBorrador(); return; }
     const datos = leerDatos();
     const draft = findDraft(currentDraftId);
@@ -355,6 +422,7 @@
   }
 
   function guardarComoNuevoBorrador() {
+    asegurarExpediente();
     const datos = leerDatos();
     const sugerido = datos.nombreCliente || 'Nuevo borrador';
     const nombre = prompt('Nombre del borrador:', sugerido);
@@ -379,6 +447,8 @@
     form.reset();
     form.elements.fechaDocumento.value = new Date().toISOString().split('T')[0];
     aplicarCamposFijos();
+    // El expediente se generará al guardar o hacer vista previa.
+    form.elements.expediente.value = '';
     inicializarBonificaciones();
     inicializarGastos();
     actualizarBloqueMixta();
@@ -433,6 +503,7 @@
     copia.nombre = draft.nombre + ' (copia)';
     copia.createdAt = new Date().toISOString();
     copia.updatedAt = new Date().toISOString();
+    // El duplicado conserva el expediente original: es una copia del mismo trabajo.
     upsertDraft(copia);
     renderizarListaDrafts();
   }
@@ -461,6 +532,7 @@
         const lista = Array.isArray(data) ? data : [data];
         const drafts = getDrafts();
         let añadidos = 0;
+        // 1) Primera pasada: añade todos los borradores importados
         lista.forEach((item) => {
           if (!item || typeof item !== 'object' || !item.datos) return;
           const copia = JSON.parse(JSON.stringify(item));
@@ -474,6 +546,9 @@
           añadidos++;
         });
         saveDrafts(drafts);
+        // 2) Segunda pasada: recalcula los contadores por mes para que el
+        //    próximo expediente que se genere continúe la serie correcta.
+        recalcularContadoresDesdeBorradores();
         renderizarListaDrafts();
         alert(añadidos === 0
           ? 'No se encontraron borradores válidos en el archivo.'
@@ -485,6 +560,22 @@
     };
     reader.onerror = () => alert('Error al leer el archivo.');
     reader.readAsText(file);
+  }
+
+  // Recalcula el contador por mes a partir de los expedientes existentes
+  // en los borradores. Se usa al importar para mantener la serie correcta.
+  function recalcularContadoresDesdeBorradores() {
+    const drafts = getDrafts();
+    const contadores = cargarContadores();
+    for (const d of drafts) {
+      const exp = (d?.datos?.expediente || '').trim();
+      if (!exp || exp.length < 7) continue;
+      const clave = exp.slice(0, 6);
+      const sec = parseInt(exp.slice(6), 10);
+      if (isNaN(sec)) continue;
+      if ((contadores[clave] || 0) < sec) contadores[clave] = sec;
+    }
+    guardarContadores(contadores);
   }
 
   function renderizarListaDrafts() {
@@ -502,6 +593,7 @@
         <div class="draft-item-info">
           <div class="draft-item-name">${esc(d.nombre)}</div>
           <div class="draft-item-meta">
+            ${d.datos?.expediente ? 'Exp. ' + esc(d.datos.expediente) + ' · ' : ''}
             ${d.datos?.nombreCliente ? esc(d.datos.nombreCliente) + ' · ' : ''}
             Actualizado: ${esc(fmtFechaHora(d.updatedAt))}
           </div>
@@ -637,7 +729,6 @@
       </tr>`
     ).join('');
 
-    // Logos: preferimos el dataURL subido, si no el archivo por defecto
     const srcIzq = d._logoIzq || LOGO_IZQ_DEFAULT;
     const srcDer = d._logoDer || LOGO_DER_DEFAULT;
 
@@ -652,8 +743,8 @@
 
       <table class="doc-table">
         ${d.oficina ? row('Oficina', d.oficina) : ''}
-        ${d.gestor ? row('Gestor', d.gestor) : ''}
         ${d.expediente ? row('Expediente', d.expediente) : ''}
+        ${d.gestor ? row('Gestor', d.gestor) : ''}
         ${d.emailGestor ? row('Email gestor', d.emailGestor) : ''}
         ${d.telefonoGestor ? row('Teléfono gestor', d.telefonoGestor) : ''}
       </table>
@@ -717,6 +808,8 @@
   }
 
   function abrirModal() {
+    // Al abrir la vista previa, asegura que hay expediente
+    asegurarExpediente();
     const d = leerDatos();
     if (!d.nombreCliente) {
       alert('Introduce al menos el nombre del cliente.');
@@ -768,10 +861,8 @@
         children: r.map((c, i) => {
           if (typeof c === 'object' && c !== null) {
             return celdaDocx(c.text, {
-              bold: c.bold,
-              fill: c.fill,
-              width: widths?.[i] ?? null,
-              align: c.align,
+              bold: c.bold, fill: c.fill,
+              width: widths?.[i] ?? null, align: c.align,
             });
           }
           return celdaDocx(c, { width: widths?.[i] ?? null });
@@ -795,7 +886,6 @@
     ]), { widths: [40, 60] });
   }
 
-  // Crea una celda de tabla sin bordes (para la cabecera de logos)
   function celdaLogoDocx(runOrText, { align = AlignmentType.LEFT } = {}) {
     return new TableCell({
       borders: {
@@ -805,10 +895,7 @@
         right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
       },
       width: { size: 50, type: WidthType.PERCENTAGE },
-      children: [new Paragraph({
-        alignment: align,
-        children: [runOrText],
-      })],
+      children: [new Paragraph({ alignment: align, children: [runOrText] })],
     });
   }
 
@@ -845,7 +932,6 @@
     });
   }
 
-  // Construye el ImageRun a partir de un dataURL
   async function construirImageRun(dataUrl) {
     const resized = await resizeDataUrl(dataUrl, LOGO_MAX_WIDTH_PX, LOGO_MAX_HEIGHT_PX);
     const bytes = dataUrlToUint8(resized.dataUrl);
@@ -857,7 +943,6 @@
     });
   }
 
-  // Devuelve el dataURL de un logo (subido, o el default por URL)
   async function obtenerLogoDataUrl(subido, urlDefault) {
     if (subido) return subido;
     try { return await urlToDataUrl(urlDefault); }
@@ -867,7 +952,6 @@
   async function construirDocumentoDOCX(d) {
     const t = textos(d);
 
-    // Logos
     const izqDataUrl = await obtenerLogoDataUrl(d._logoIzq, LOGO_IZQ_DEFAULT);
     const derDataUrl = await obtenerLogoDataUrl(d._logoDer, LOGO_DER_DEFAULT);
     const izqRun = izqDataUrl ? await construirImageRun(izqDataUrl) : new TextRun({ text: '' });
@@ -895,8 +979,8 @@
 
     const filasCabecera = [];
     if (d.oficina) filasCabecera.push(['Oficina', d.oficina]);
-    if (d.gestor) filasCabecera.push(['Gestor', d.gestor]);
     if (d.expediente) filasCabecera.push(['Expediente', d.expediente]);
+    if (d.gestor) filasCabecera.push(['Gestor', d.gestor]);
     if (d.emailGestor) filasCabecera.push(['Email gestor', d.emailGestor]);
     if (d.telefonoGestor) filasCabecera.push(['Teléfono gestor', d.telefonoGestor]);
 
@@ -1047,7 +1131,10 @@
 
   function nombreArchivo(ext) {
     const base = (ultimosDatos?.nombreCliente || 'cliente').replace(/\s+/g, '_');
-    return `Propuesta_${base}_${new Date().getFullYear()}.${ext}`;
+    const exp = (ultimosDatos?.expediente || '').trim();
+    return exp
+      ? `Propuesta_${exp}_${base}.${ext}`
+      : `Propuesta_${base}_${new Date().getFullYear()}.${ext}`;
   }
 
   async function descargarDOCX() {
@@ -1073,7 +1160,6 @@
   form.addEventListener('change', autosave);
   selectTipoInteres.addEventListener('change', () => { actualizarBloqueMixta(); autosave(); });
 
-  // Subida de logos
   form.elements.logoIzquierdoFile?.addEventListener('change', async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -1122,6 +1208,7 @@
     logoIzquierdoDataUrl = null;
     logoDerechoDataUrl = null;
     aplicarCamposFijos();
+    form.elements.expediente.value = '';
     inicializarBonificaciones();
     inicializarGastos();
     actualizarBloqueMixta();

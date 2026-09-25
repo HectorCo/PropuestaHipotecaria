@@ -1,6 +1,3 @@
-// Service Worker minimalista.
-// No intercepta peticiones: todo va directo a la red.
-
 self.addEventListener('install', () => {
   self.skipWaiting();
 });

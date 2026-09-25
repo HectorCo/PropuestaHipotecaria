@@ -28,7 +28,7 @@
       if ('caches' in window) {
         caches.keys().then(function (keys) {
           keys.forEach(function (k) {
-            if (k.indexOf('v11') === -1) {
+            if (k.indexOf('v12') === -1) {
               console.log('[cleanup] Borrando caché antigua:', k);
               caches.delete(k);
             }
@@ -59,7 +59,6 @@
 
   <main>
     <form id="formPropuesta" autocomplete="off">
-      <!-- ============ DATOS GENERALES ============ -->
       <fieldset>
         <legend>Datos generales</legend>
         <label>Nombre del cliente
@@ -104,7 +103,6 @@
         </p>
       </fieldset>
 
-      <!-- ============ LOGOS ============ -->
       <fieldset>
         <legend>Logos de la propuesta</legend>
         <label>Logo izquierdo (imagen)
@@ -119,7 +117,6 @@
         </p>
       </fieldset>
 
-      <!-- ============ 1. DATOS DE LA OPERACIÓN ============ -->
       <fieldset>
         <legend>1. Datos de la operación</legend>
         <label>Precio de compra (€)
@@ -173,7 +170,6 @@
         </div>
       </fieldset>
 
-      <!-- ============ 2. CONDICIONES FINANCIERAS ============ -->
       <fieldset>
         <legend>2. Condiciones financieras</legend>
         <label>Cuota mensual — con bonificación (€)
@@ -205,14 +201,12 @@
         </label>
       </fieldset>
 
-      <!-- ============ 3. BONIFICACIONES ============ -->
       <fieldset>
         <legend>3. Bonificaciones aplicables</legend>
         <div class="lista-dinamica" id="listaBonificaciones"></div>
         <button type="button" class="btn-add" data-add="bonificaciones">+ Añadir bonificación</button>
       </fieldset>
 
-      <!-- ============ 4. COMISIONES ============ -->
       <fieldset>
         <legend>4. Comisiones</legend>
         <label>Comisión de apertura
@@ -232,7 +226,6 @@
         </label>
       </fieldset>
 
-      <!-- ============ 5. DESGLOSE DE GASTOS ============ -->
       <fieldset>
         <legend>5. Desglose de gastos</legend>
         <div class="tabla-gastos-wrap">
@@ -250,15 +243,17 @@
         </div>
         <div class="totales-gastos">
           <label>Total a asumir por el cliente (€)
-            <input type="text" name="totalCliente" placeholder="30.871,82" />
+            <input type="text" name="totalCliente" readonly placeholder="Se calcula automáticamente" />
           </label>
           <label>Total a asumir por la entidad (€)
-            <input type="text" name="totalEntidad" placeholder="7.021,19" />
+            <input type="text" name="totalEntidad" readonly placeholder="Se calcula automáticamente" />
           </label>
         </div>
+        <p class="hint full">
+          Los totales se calculan automáticamente sumando las columnas "Cliente" y "Entidad" de la tabla.
+        </p>
       </fieldset>
 
-      <!-- ============ 6. APORTACIÓN Y AHORROS ============ -->
       <fieldset>
         <legend>6. Aportación y ahorros</legend>
         <label>Ahorros del cliente (€)
@@ -269,18 +264,19 @@
         </label>
       </fieldset>
 
-      <!-- ============ 7. AHORRO TOTAL A APORTAR ============ -->
       <fieldset>
         <legend>7. Ahorro total a aportar por el cliente</legend>
         <label class="full">Importe total a aportar (€)
-          <input type="text" name="ahorroTotalAportar" placeholder="138.871,82" />
+          <input type="text" name="ahorroTotalAportar" readonly placeholder="Se calcula automáticamente" />
         </label>
         <label class="full">Texto explicativo (opcional)
           <textarea name="textoAhorro" rows="2" placeholder="(Precio de compra − Importe financiado + comisiones y gastos a su cargo)"></textarea>
         </label>
+        <p class="hint full">
+          Fórmula aplicada: <strong>Precio de compra − Importe financiado + Total a asumir por el cliente</strong>.
+        </p>
       </fieldset>
 
-      <!-- ============ TEXTOS PERSONALIZABLES ============ -->
       <fieldset>
         <legend>Textos personalizables (opcional)</legend>
         <label class="full">Párrafo de conclusión
